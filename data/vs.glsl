@@ -7,5 +7,12 @@ layout(location = 0) in vec3 pos;
 void
 main(void)
 {
-        gl_Position = vec4(pos, 1.0);
+        const mat4 model = mat4(
+                 1.0,  0.0,  0.0,  0.0,
+                 0.0,  0.0, -1.0,  0.0,
+                 0.0,  1.0,  0.0,  0.0,
+                 0.0,  0.0,  0.0,  1.0
+        );
+
+        gl_Position = model * vec4(pos, 1.0);
 }

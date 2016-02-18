@@ -21,10 +21,10 @@ static struct PdSolver *solver;
 
 
 static float const positions[] = {
-        -1.0f, -1.0f,  0.0f,
-         1.0f, -1.0f,  0.0f,
-        -1.0f,  1.0f,  0.0f,
-         1.0f,  1.0f,  0.0f,
+        -1.0f, 0.0f, -1.0f,
+         1.0f, 0.0f, -1.0f,
+        -1.0f, 0.0f,  1.0f,
+         1.0f, 0.0f,  1.0f,
 };
 
 static uint8_t const indices[] = {
@@ -154,7 +154,6 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
                        GL_UNSIGNED_BYTE, NULL);
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-
         return TRUE;
 }
 
@@ -168,6 +167,14 @@ unrealize(GtkWidget *widget, gpointer user_data)
         glDeleteProgram(programs[1]);
         glDeleteProgramPipelines(1, &pipeline);
         glDeleteVertexArrays(1, &vao);
+}
+
+
+gboolean
+animate(GtkWidget *widget, GdkFrameClock *frame_clock, gpointer user_data)
+{
+        gtk_gl_area_queue_render(GTK_GL_AREA(widget));
+        return G_SOURCE_CONTINUE;
 }
 
 
@@ -191,7 +198,7 @@ main(int argc, char *argv[])
         g_signal_connect(gl_area, "unrealize", G_CALLBACK(unrealize), NULL);
 
         gtk_container_add(GTK_CONTAINER(window), gl_area);
-
+        gtk_widget_add_tick_callback(gl_area, animate, NULL, NULL);
 
         g_signal_connect(window, "key-press-event",
                          G_CALLBACK(key_press_event), gl_area);

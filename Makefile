@@ -1,5 +1,5 @@
 CC       = gcc
-CFLAGS   = -g -I./ -O3 -Wall `pkg-config --cflags gtk+-3.0 epoxy`
+CFLAGS   = -std=c11 -g -I./ -O3 -Wall `pkg-config --cflags gtk+-3.0 epoxy`
 CXXFLAGS = -std=c++14 -g -O3 -Wall
 
 

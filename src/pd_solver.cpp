@@ -12,6 +12,7 @@ static float const gravity = 9.81f;
 struct PdSolver {
         float *forces;
         float *positions;
+        float *positions_last;
         uint32_t n_points;
 
         uint8_t *springs;
@@ -34,6 +35,8 @@ pd_solver_alloc(float const *positions,
         /* copy positions */
         solver->positions = (float *)malloc(3 * n_positions * sizeof *positions);
         memcpy(solver->positions, positions, 3 * n_positions * sizeof *positions);
+        solver->positions_last = (float *)malloc(3 * n_positions * sizeof *positions);
+        memcpy(solver->positions_last, positions, 3 * n_positions * sizeof *positions);
         solver->n_points = n_positions;
 
 
@@ -115,7 +118,14 @@ pd_solver_advance(struct PdSolver *solver)
         for (uint32_t i = 0; i < solver->n_springs; ++i) {
         }
 
-        /* move points */
+        /* move points with Verlet integration scheme */
+        float timestep = 1.0f/1000.0f; /* 1 ms per timestep */
+        for (uint32_t i = 0; i < 3 * solver->n_points; ++i) {
+                float const tmp = solver->positions[i];
+                /* 2x - x' + a*t^2; x' is last position */
+                solver->positions[i] += tmp - solver->positions_last[i] + solver->forces[i] * timestep * timestep;
+                solver->positions_last[i] = tmp;
+        }
 }
 
 
