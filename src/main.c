@@ -1,11 +1,14 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include <epoxy/gl.h>
 #include <gtk/gtk.h>
 #include <pk/pk_io.h>
+
+#include "pd_solver.h"
 
 
 static GLuint pipeline;
@@ -14,6 +17,7 @@ static GLuint vao;
 static GLuint vbos[2];
 
 static float *positions_mapped;
+static struct PdSolver *solver;
 
 
 static float const positions[] = {
@@ -125,6 +129,8 @@ realize(GtkWidget *widget, gpointer user_data)
 
         glBindVertexBuffer(0, vbos[0], 0, sizeof (GLfloat[3]));
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbos[1]);
+
+        solver = pd_solver_alloc(positions, 4, indices, 6);
 }
 
 
@@ -132,6 +138,11 @@ static gboolean
 render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
 {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        /* TODO: avoid memcpy by passing pointer to advance solver */
+        pd_solver_advance(solver);
+
+        memcpy(positions_mapped, pd_solver_map_positions(solver), 4*3 *sizeof *positions_mapped);
 
         /*
         glDrawElements(GL_TRIANGLES, (sizeof indices)/(sizeof indices[0]),
