@@ -25,7 +25,7 @@ pd_solver_free(struct PdSolver *solver);
 
 
 void
-pd_solver_advance(struct PdSolver *solver);
+pd_solver_advance(struct PdSolver *solver, float const timestep);
 
 
 float const *

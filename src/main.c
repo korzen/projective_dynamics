@@ -21,15 +21,15 @@ static struct PdSolver *solver;
 
 
 static float const positions[] = {
-        -1.0f, 0.0f, -1.0f,
-         1.0f, 0.0f, -1.0f,
         -1.0f, 0.0f,  1.0f,
          1.0f, 0.0f,  1.0f,
+        -1.0f, 0.0f, -1.0f,
+         1.0f, 0.0f, -1.0f,
 };
 
 static uint8_t const indices[] = {
-        0, 1, 3,
-        0, 3, 2,
+        0, 2, 1,
+        2, 3, 1,
 };
 
 
@@ -140,7 +140,8 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         /* TODO: avoid memcpy by passing pointer to advance solver */
-        pd_solver_advance(solver);
+        float const timestep = 1.0f/60.0f;
+        pd_solver_advance(solver, timestep);
 
         memcpy(positions_mapped, pd_solver_map_positions(solver), 4*3 *sizeof *positions_mapped);
 
