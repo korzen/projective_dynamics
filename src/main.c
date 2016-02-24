@@ -10,29 +10,19 @@
 #include <gtk/gtk.h>
 #include <pk/pk_io.h>
 
+#include "pd_mesh.h"
 #include "pd_solver.h"
 
 
-static GLuint pipeline;
-static GLuint programs[2];
-static GLuint vao;
-static GLuint vbos[2];
+static GLsizei count;
+static GLuint  pipeline;
+static GLuint  programs[2];
+static GLuint  vao;
+static GLuint  vbos[2];
 
-static float *positions_mapped;
+static uint32_t         n_positions;
+static float           *positions_mapped;
 static struct PdSolver *solver;
-
-
-static float const positions[] = {
-        -1.0f, 0.0f,  1.0f,
-         1.0f, 0.0f,  1.0f,
-        -1.0f, 0.0f, -1.0f,
-         1.0f, 0.0f, -1.0f,
-};
-
-static uint8_t const indices[] = {
-        0, 2, 1,
-        2, 3, 1,
-};
 
 
 static void
@@ -109,6 +99,11 @@ realize(GtkWidget *widget, gpointer user_data)
         glBindProgramPipeline(pipeline);
 
 
+        struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(16, 8);
+        count = mesh->n_indices;
+        n_positions = mesh->n_positions;
+
+
         GLbitfield const flags = GL_MAP_COHERENT_BIT
                                | GL_MAP_PERSISTENT_BIT
                                | GL_MAP_WRITE_BIT;
@@ -116,12 +111,11 @@ realize(GtkWidget *widget, gpointer user_data)
 
         /* allocate buffers */
         glCreateBuffers(2, vbos);
-        glNamedBufferStorage(vbos[0], sizeof positions, positions, flags);
-        glNamedBufferStorage(vbos[1], sizeof indices, indices, 0);
+        glNamedBufferStorage(vbos[0], mesh->n_positions*3*sizeof *mesh->positions, mesh->positions, flags);
+        glNamedBufferStorage(vbos[1], mesh->n_indices*sizeof *mesh->indices, mesh->indices, 0);
 
         /* map position buffer, topology of mesh does not change */
-        positions_mapped = glMapNamedBufferRange(vbos[0], 0, sizeof positions,
-                                                 flags);
+        positions_mapped = glMapNamedBufferRange(vbos[0], 0, mesh->n_positions*sizeof *mesh->positions, flags);
 
         glCreateVertexArrays(1, &vao);
         glBindVertexArray(vao);
@@ -133,53 +127,10 @@ realize(GtkWidget *widget, gpointer user_data)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbos[1]);
 
 
-        /* determine springs from the mesh edges */
-        uint32_t const n_indices = 6;
-        struct PdConstraintSpring *spring_constraints = malloc(n_indices*sizeof *spring_constraints);
-        uint32_t n_spring_constraints = 0;
-
-        for (uint32_t i = 0; i < n_indices/3; ++i) {
-                /* process triangle */
-                for (int e = 0; e < 3; ++e) {
-                        assert(indices[3*i + e] < 256);
-                        uint8_t spring[2] = {
-                                indices[3*i + e],
-                                indices[3*i  + (e + 1)%3],
-                        };
-
-                        if (spring[0] > spring[1]) {
-                                uint8_t const tmp = spring[0];
-                                spring[0] = spring[1];
-                                spring[1] = tmp;
-                        }
-
-                        /* skip the spring if the other exists */
-                        /* TODO: yeah, we should probably use set; maybe use Haskell/Python */
-                        uint32_t j;
-                        for (j = 0; j < n_spring_constraints && (spring_constraints[j].i[0] != spring[0] || spring_constraints[j].i[1] != spring[1]); ++j);
-                        if (j != n_spring_constraints)
-                                continue;
-
-                        float const *p0 = positions + 3*spring[0];
-                        float const *p1 = positions + 3*spring[1];
-                        float const rest_length = sqrt(pow(p1[0] - p0[0], 2) + pow(p1[1] - p0[1], 2) + pow(p1[2] - p0[2], 2));
-
-                        struct PdConstraintSpring s = {
-                                .i[0] = spring[0],
-                                .i[1] = spring[1],
-                                .rest_length = rest_length,
-                        };
-                        spring_constraints[n_spring_constraints++] = s;
-                }
-        }
-
-        struct PdConstraintAttachment *attachment_constraints = NULL;
-        uint32_t const n_attachment_constraints = 0;
-
-        uint32_t const n_positions = 4;
-        solver = pd_solver_alloc(positions, n_positions,
-                                 attachment_constraints, n_attachment_constraints,
-                                 spring_constraints, n_spring_constraints);
+        solver = pd_solver_alloc(mesh->positions, mesh->n_positions,
+                                 mesh->attachments, mesh->n_attachments,
+                                 mesh->springs, mesh->n_springs);
+        pd_mesh_surface_free(mesh);
 }
 
 
@@ -192,16 +143,16 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
         float const timestep = 1.0f/60.0f;
         pd_solver_advance(solver, timestep);
 
-        memcpy(positions_mapped, pd_solver_map_positions(solver), 4*3 *sizeof *positions_mapped);
+        memcpy(positions_mapped, pd_solver_map_positions(solver), n_positions*3*sizeof *positions_mapped);
 
         /*
         glDrawElements(GL_TRIANGLES, (sizeof indices)/(sizeof indices[0]),
                        GL_UNSIGNED_BYTE, NULL);
         */
-
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glDrawElements(GL_TRIANGLES, (sizeof indices)/(sizeof indices[0]),
-                       GL_UNSIGNED_BYTE, NULL);
+        glPointSize(5.0f);
+        glDrawArrays(GL_POINTS, 0, n_positions);
+        glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, NULL);
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
         return TRUE;
@@ -229,7 +180,7 @@ animate(GtkWidget *widget, GdkFrameClock *frame_clock, gpointer user_data)
 
 
 int
-main(int argc, char *argv[])
+main(int argc, char **argv)
 {
         gtk_init(&argc, &argv);
 
