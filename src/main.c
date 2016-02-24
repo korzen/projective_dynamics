@@ -155,12 +155,37 @@ motion_notify_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
 }
 
 
+static gboolean
+scroll_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
+{
+        GdkScrollDirection direction;
+        gdk_event_get_scroll_direction(event, &direction);
+
+        mat4_t zoom = MAT4;
+        switch (direction) {
+        case GDK_SCROLL_UP:
+                mat4_scale(&zoom, 1.1f, 1.1f, 1.1f);
+                break;
+        case GDK_SCROLL_DOWN:
+                mat4_scale(&zoom, 0.9f, 0.9f, 0.9f);
+                break;
+        default:
+                return FALSE;
+        }
+
+        mat4_mul(&ubo_mapped->view, &zoom, &ubo_mapped->view);
+
+        return TRUE;
+}
+
+
 static void
 realize(GtkWidget *widget, gpointer user_data)
 {
         gtk_gl_area_make_current(GTK_GL_AREA(widget));
 
         glDebugMessageCallback(debug, NULL);
+
 
         char *str = pk_io_read_file("data/vs.glsl");
         programs[0] = glCreateShaderProgramv(GL_VERTEX_SHADER, 1, &str);
@@ -240,10 +265,9 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
 
         memcpy(positions_mapped, pd_solver_map_positions(solver), n_positions*3*sizeof *positions_mapped);
 
-        /*
-        glDrawElements(GL_TRIANGLES, (sizeof indices)/(sizeof indices[0]),
-                       GL_UNSIGNED_BYTE, NULL);
-        */
+
+        /*glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, NULL);*/
+
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         glPointSize(5.0f);
         glDrawArrays(GL_POINTS, 0, n_positions);
@@ -290,13 +314,15 @@ main(int argc, char **argv)
         gtk_widget_add_events(gl_area,
                               GDK_BUTTON_PRESS_MASK |
                               GDK_BUTTON_RELEASE_MASK |
-                              GDK_POINTER_MOTION_MASK);
+                              GDK_POINTER_MOTION_MASK |
+                              GDK_SCROLL_MASK);
 
         g_signal_connect(gl_area, "button-press-event", G_CALLBACK(button_press_event), NULL);
         g_signal_connect(gl_area, "create-context", G_CALLBACK(create_context), NULL);
         g_signal_connect(gl_area, "motion-notify-event", G_CALLBACK(motion_notify_event), NULL);
         g_signal_connect(gl_area, "realize", G_CALLBACK(realize), NULL);
         g_signal_connect(gl_area, "render", G_CALLBACK(render), NULL);
+        g_signal_connect(gl_area, "scroll-event", G_CALLBACK(scroll_event), NULL);
         g_signal_connect(gl_area, "unrealize", G_CALLBACK(unrealize), NULL);
 
         gtk_container_add(GTK_CONTAINER(window), gl_area);

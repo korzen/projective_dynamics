@@ -9,15 +9,12 @@ layout(binding = 0, std140) uniform MatrixBlock {
 };
 
 
+out vec4 v_pos;
+
+
 void
 main(void)
 {
-        const mat4 model = mat4(
-                 0.5,  0.0,  0.0,  0.0,
-                 0.0,  0.0, -0.5,  0.0,
-                 0.0,  0.5,  0.0,  0.0,
-                 0.0,  0.0,  0.0,  1.0
-        );
-
-        gl_Position = projection*view*model*vec4(pos, 1.0);
+        v_pos = view*model*vec4(pos, 1.0);
+        gl_Position = projection*v_pos;
 }
