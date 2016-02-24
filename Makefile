@@ -1,5 +1,5 @@
-CC       = gcc
-CXX      = g++
+CC       ?= gcc
+CXX      ?= g++
 CFLAGS   = -std=c11 -g -I./ -O3 -Wall -march=native `pkg-config --cflags gtk+-3.0 epoxy`
 CXXFLAGS = -std=c++14 -g -O3 -Wall -march=native
 LDLIBS   = -lm
