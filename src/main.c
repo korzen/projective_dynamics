@@ -49,7 +49,7 @@ create_context(GtkGLArea *area)
 
         gdk_gl_context_set_debug_enabled(context, TRUE);
         gdk_gl_context_set_forward_compatible(context, TRUE);
-        gdk_gl_context_set_required_version(context, 3, 3);
+        gdk_gl_context_set_required_version(context, 4, 5);
 
         return context;
 }
