@@ -1,7 +1,9 @@
+#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <tgmath.h>
 #include <time.h>
 
 #include <epoxy/gl.h>
@@ -130,7 +132,54 @@ realize(GtkWidget *widget, gpointer user_data)
         glBindVertexBuffer(0, vbos[0], 0, sizeof (GLfloat[3]));
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbos[1]);
 
-        solver = pd_solver_alloc(positions, 4, indices, 6);
+
+        /* determine springs from the mesh edges */
+        uint32_t const n_indices = 6;
+        struct PdConstraintSpring *spring_constraints = malloc(n_indices*sizeof *spring_constraints);
+        uint32_t n_spring_constraints = 0;
+
+        for (uint32_t i = 0; i < n_indices/3; ++i) {
+                /* process triangle */
+                for (int e = 0; e < 3; ++e) {
+                        assert(indices[3*i + e] < 256);
+                        uint8_t spring[2] = {
+                                indices[3*i + e],
+                                indices[3*i  + (e + 1)%3],
+                        };
+
+                        if (spring[0] > spring[1]) {
+                                uint8_t const tmp = spring[0];
+                                spring[0] = spring[1];
+                                spring[1] = tmp;
+                        }
+
+                        /* skip the spring if the other exists */
+                        /* TODO: yeah, we should probably use set; maybe use Haskell/Python */
+                        uint32_t j;
+                        for (j = 0; j < n_spring_constraints && (spring_constraints[j].i[0] != spring[0] || spring_constraints[j].i[1] != spring[1]); ++j);
+                        if (j != n_spring_constraints)
+                                continue;
+
+                        float const *p0 = positions + 3*spring[0];
+                        float const *p1 = positions + 3*spring[1];
+                        float const rest_length = sqrt(pow(p1[0] - p0[0], 2) + pow(p1[1] - p0[1], 2) + pow(p1[2] - p0[2], 2));
+
+                        struct PdConstraintSpring s = {
+                                .i[0] = spring[0],
+                                .i[1] = spring[1],
+                                .rest_length = rest_length,
+                        };
+                        spring_constraints[n_spring_constraints++] = s;
+                }
+        }
+
+        struct PdConstraintAttachment *attachment_constraints = NULL;
+        uint32_t const n_attachment_constraints = 0;
+
+        uint32_t const n_positions = 4;
+        solver = pd_solver_alloc(positions, n_positions,
+                                 attachment_constraints, n_attachment_constraints,
+                                 spring_constraints, n_spring_constraints);
 }
 
 
