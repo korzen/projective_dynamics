@@ -96,7 +96,6 @@ pd_solver_advance(struct PdSolver *solver, float const timestep)
                 };
                 float const v_length = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
                 float const a = 0.5f*(v_length - s.rest_length)/v_length;
-//                printf("%u, %u %u %f\n", i, s.i[0], s.i[1], s.rest_length);
 
                 for (int j = 0; j < 3; ++j) {
                         solver->positions[3*s.i[0] + j] -= (s.i[0] == 0) ? 0.0f : a*v[j];

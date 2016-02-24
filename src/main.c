@@ -56,6 +56,18 @@ create_context(GtkGLArea *area)
 
 
 static gboolean
+esc_key_press_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
+{
+        guint keyval;
+        gdk_event_get_keyval(event, &keyval);
+
+        if (keyval == GDK_KEY_Escape)
+                gtk_main_quit();
+
+        return TRUE;
+}
+
+static gboolean
 key_press_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
 {
         guint keyval;
@@ -186,7 +198,8 @@ main(int argc, char **argv)
 
         GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
         gtk_widget_add_events(window, GDK_KEY_PRESS_MASK);
-
+        g_signal_connect(window, "key-press-event",
+                         G_CALLBACK(esc_key_press_event), NULL);
 
         /* set up GL window */
         GtkWidget *gl_area = gtk_gl_area_new();
