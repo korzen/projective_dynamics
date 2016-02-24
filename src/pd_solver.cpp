@@ -74,7 +74,7 @@ pd_solver_advance(struct PdSolver *solver, float const timestep)
         for (uint32_t i = 0; i < solver->n_points; ++i) {
                 solver->forces[3*i] = 0.0f;
                 solver->forces[3*i + 1] = 0.0f;
-                solver->forces[3*i + 2] = (i == 0) ? 0.0f : -gravity;
+                solver->forces[3*i + 2] = -gravity;
         }
 
         /* move points with Verlet integration scheme */
@@ -85,10 +85,16 @@ pd_solver_advance(struct PdSolver *solver, float const timestep)
                 solver->positions_last[i] = tmp;
         }
 
+        /* satisfy attachment constraints */
+        for (uint32_t i = 0; i < solver->n_attachments; ++i) {
+                struct PdConstraintAttachment const a = solver->attachments[i];
+                memcpy(solver->positions + 3*a.i, a.position, sizeof a.position);
+        }
+
         /* satisfy spring constraints; fixed length assumed; one iteration */
         for (uint32_t i = 0; i < solver->n_springs; ++i) {
                 /* make copy since it is tiny and may get optimized away */
-                struct PdConstraintSpring s = solver->springs[i];
+                struct PdConstraintSpring const s = solver->springs[i];
                 float const v[3] = {
                         solver->positions[3*s.i[0]] - solver->positions[3*s.i[1]],
                         solver->positions[3*s.i[0] + 1] - solver->positions[3*s.i[1] + 1],
@@ -98,8 +104,8 @@ pd_solver_advance(struct PdSolver *solver, float const timestep)
                 float const a = 0.5f*(v_length - s.rest_length)/v_length;
 
                 for (int j = 0; j < 3; ++j) {
-                        solver->positions[3*s.i[0] + j] -= (s.i[0] == 0) ? 0.0f : a*v[j];
-                        solver->positions[3*s.i[1] + j] += (s.i[1] == 0) ? 0.0f : a*v[j];
+                        solver->positions[3*s.i[0] + j] -= a*v[j];
+                        solver->positions[3*s.i[1] + j] += a*v[j];
                 }
 
         }

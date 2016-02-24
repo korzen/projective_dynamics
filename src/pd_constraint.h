@@ -7,6 +7,7 @@
 
 /* TODO: DOD, layout for now optimized by solver */
 struct PdConstraintAttachment {
+        uint32_t i;
         float position[3];
 };
 

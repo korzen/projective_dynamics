@@ -101,13 +101,14 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
         /* generate right edge constraints */
         for (uint32_t j = 0; j + 1 < n_y; ++j)
                 m->springs[m->n_springs++] = mk_spring(m->positions, j*n_x + (n_x - 1), (j + 1)*n_x + (n_x - 1));
-
         /* generate bottom edge constraints */
         for (uint32_t i = 0; i + 1 < n_x; ++i)
                 m->springs[m->n_springs++] = mk_spring(m->positions, (n_y - 1)*n_x + i, (n_y - 1)*n_x + (i + 1));
 
-        m->attachments   = NULL;
-        m->n_attachments = 0;
+        m->n_attachments  = 2;
+        m->attachments    = malloc(m->n_attachments*sizeof *m->attachments);
+        m->attachments[0] = (struct PdConstraintAttachment){ 0, { m->positions[0], m->positions[1], m->positions[2], }, };
+        m->attachments[1] = (struct PdConstraintAttachment){ (n_x - 1), { m->positions[3*(n_x - 1)], m->positions[3*(n_x - 1) + 1], m->positions[3*(n_x - 1) + 2], }, };
 
         return m;
 }

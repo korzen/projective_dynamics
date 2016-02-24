@@ -111,7 +111,7 @@ realize(GtkWidget *widget, gpointer user_data)
         glBindProgramPipeline(pipeline);
 
 
-        struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(16, 8);
+        struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(16, 16);
         count = mesh->n_indices;
         n_positions = mesh->n_positions;
 
