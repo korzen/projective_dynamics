@@ -7,4 +7,4 @@ LDLIBS   = -lm
 
 all:
 	$(CXX) $(CXXFLAGS) -c src/pd_solver.cpp -o obj/pd_solver.o
-	$(CC) $(CFLAGS) obj/pd_solver.o src/pd_io.c src/main.c -o pd `pkg-config --libs gtk+-3.0 epoxy` $(LDLIBS)
+	$(CC) $(CFLAGS) obj/pd_solver.o src/pd_io.c src/pd_linalg.c src/main.c -o pd `pkg-config --libs gtk+-3.0 epoxy` $(LDLIBS)
