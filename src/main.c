@@ -143,6 +143,7 @@ create_context(GtkGLArea *area)
         gdk_gl_context_set_forward_compatible(context, TRUE);
         gdk_gl_context_set_required_version(context, 4, 5);
 
+
         return context;
 }
 
@@ -248,22 +249,39 @@ realize(GtkWidget *widget, gpointer user_data)
         gtk_gl_area_make_current(GTK_GL_AREA(widget));
 
         glDebugMessageCallback(debug, NULL);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
         glPointSize(5.0f);
+
+        int gl_ver_maj = 0, gl_ver_min = 0;
+        glGetIntegerv(GL_MAJOR_VERSION, &gl_ver_maj);
+        glGetIntegerv(GL_MINOR_VERSION, &gl_ver_min);
+        printf("OpenGL Version %d.%d\n", gl_ver_maj, gl_ver_min);
 
 
         char *str = pk_io_read_file("data/vs.glsl");
         programs[0] = glCreateShaderProgramv(GL_VERTEX_SHADER, 1, &str);
         free(str);
+        if (programs[0] == 0){
+            char info_log[1024] = {0};
+            GLsizei info_len = 0;
+            glGetProgramInfoLog(programs[0], 1024, &info_len, info_log);
+            printf("Program Failed to Compile or Link:\n%s\n--------", info_log);
+        }
 
         str = pk_io_read_file("data/fs.glsl");
         programs[1] = glCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &str);
         free(str);
+        if (programs[1] == 0){
+            char info_log[1024] = {0};
+            GLsizei info_len = 0;
+            glGetProgramInfoLog(programs[0], 1024, &info_len, info_log);
+            printf("Program Failed to Compile or Link:\n%s\n--------", info_log);
+        }
 
-		// TODO WILL: One of the program objects is not successfully linked?
         glCreateProgramPipelines(1, &pipeline);
+        glBindProgramPipeline(pipeline);
         glUseProgramStages(pipeline, GL_VERTEX_SHADER_BIT, programs[0]);
         glUseProgramStages(pipeline, GL_FRAGMENT_SHADER_BIT, programs[1]);
-        glBindProgramPipeline(pipeline);
 
 
         struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(16, 16);
