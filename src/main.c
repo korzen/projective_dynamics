@@ -64,7 +64,64 @@ static void
 debug(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
       GLchar const *message, void const *user_param)
 {
-        fprintf(stderr, "%s\n", message);
+        const char *severity_msg = NULL;
+        switch (severity){
+            case GL_DEBUG_SEVERITY_HIGH_ARB:
+                severity_msg = "High severity";
+                break;
+            case GL_DEBUG_SEVERITY_MEDIUM_ARB:
+                severity_msg = "Medium severity";
+                break;
+            case GL_DEBUG_SEVERITY_LOW_ARB:
+                severity_msg = "Low severity";
+                break;
+            default:
+                severity_msg = "Unknown severity";
+        }
+        const char *src_msg = NULL;
+        switch (source){
+            case GL_DEBUG_SOURCE_API_ARB:
+                src_msg = "API";
+                break;
+            case GL_DEBUG_SOURCE_WINDOW_SYSTEM_ARB:
+                src_msg = "Window system";
+                break;
+            case GL_DEBUG_SOURCE_SHADER_COMPILER_ARB:
+                src_msg = "Shader compiler";
+                break;
+            case GL_DEBUG_SOURCE_THIRD_PARTY_ARB:
+                src_msg = "Third party";
+                break;
+            case GL_DEBUG_SOURCE_APPLICATION_ARB:
+                src_msg = "Application";
+                break;
+            default:
+                src_msg = "Other";
+        }
+        const char *type_msg = NULL;
+        switch (type){
+            case GL_DEBUG_TYPE_ERROR_ARB:
+                type_msg = "Error";
+                break;
+            case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR_ARB:
+                type_msg = "Deprecated behavior";
+                break;
+            case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR_ARB:
+                type_msg = "Undefined behavior";
+                break;
+            case GL_DEBUG_TYPE_PORTABILITY_ARB:
+                type_msg = "Portability";
+                break;
+            case GL_DEBUG_TYPE_PERFORMANCE_ARB:
+                type_msg = "Performance";
+                break;
+            default:
+                type_msg = "Other";
+        }
+        fprintf(stderr, "OpenGL Debug Message:\n\tSeverity: %s\n\t"
+                "Source: %s\n\tType: %s\n\tMessage: %s\n", severity_msg, src_msg,
+                type_msg, message);
+        assert(severity != GL_DEBUG_SEVERITY_HIGH && type != GL_DEBUG_TYPE_ERROR);
 }
 
 
@@ -202,6 +259,7 @@ realize(GtkWidget *widget, gpointer user_data)
         programs[1] = glCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &str);
         free(str);
 
+		// TODO WILL: One of the program objects is not successfully linked?
         glCreateProgramPipelines(1, &pipeline);
         glUseProgramStages(pipeline, GL_VERTEX_SHADER_BIT, programs[0]);
         glUseProgramStages(pipeline, GL_FRAGMENT_SHADER_BIT, programs[1]);
