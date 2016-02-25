@@ -15,12 +15,16 @@
 #include "pd_solver.h"
 
 
-static GLsizei count;
+enum { EBO_TRIANGLES, EBO_LINES, N_EBOS, };
+
+static GLuint  ebos[N_EBOS];
+static GLsizei lines_count;
 static GLuint  pipeline;
 static GLuint  programs[2];
+static GLsizei triangles_count;
 static GLuint  ubo;
 static GLuint  vao;
-static GLuint  vbos[2];
+static GLuint  vbo;
 
 static quat_t cur_quat;
 static uint32_t n_positions;
@@ -187,6 +191,7 @@ realize(GtkWidget *widget, gpointer user_data)
         gtk_gl_area_make_current(GTK_GL_AREA(widget));
 
         glDebugMessageCallback(debug, NULL);
+        glPointSize(5.0f);
 
 
         char *str = pk_io_read_file("data/vs.glsl");
@@ -204,7 +209,7 @@ realize(GtkWidget *widget, gpointer user_data)
 
 
         struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(16, 16);
-        count = mesh->n_indices;
+        triangles_count = mesh->n_indices;
         n_positions = mesh->n_positions;
 
 
@@ -213,12 +218,24 @@ realize(GtkWidget *widget, gpointer user_data)
                                | GL_MAP_WRITE_BIT;
 
         /* allocate buffers */
-        glCreateBuffers(2, vbos);
-        glNamedBufferStorage(vbos[0], mesh->n_positions*3*sizeof *mesh->positions, mesh->positions, flags);
-        glNamedBufferStorage(vbos[1], mesh->n_indices*sizeof *mesh->indices, mesh->indices, 0);
+        glCreateBuffers(1, &vbo);
+        glNamedBufferStorage(vbo, mesh->n_positions*3*sizeof *mesh->positions, mesh->positions, flags);
 
         /* map position buffer, topology of mesh does not change */
-        positions_mapped = glMapNamedBufferRange(vbos[0], 0, mesh->n_positions*sizeof *mesh->positions, flags);
+        positions_mapped = glMapNamedBufferRange(vbo, 0, mesh->n_positions*sizeof *mesh->positions, flags);
+
+
+        glCreateBuffers(N_EBOS, ebos);
+        glNamedBufferStorage(ebos[EBO_TRIANGLES], mesh->n_indices*sizeof *mesh->indices, mesh->indices, 0);
+
+        /* TODO: DOD on springs so we can pass pointer directly */
+        lines_count             = 2*mesh->n_springs;
+        size_t const lines_size = lines_count*sizeof *mesh->indices;
+        uint32_t *lines_indices = malloc(lines_size);
+        for (uint32_t i = 0; i < mesh->n_springs; ++i)
+                memcpy(lines_indices + 2*i, mesh->springs[i].i, 2*sizeof *lines_indices);
+        glNamedBufferStorage(ebos[EBO_LINES], lines_size, lines_indices, 0);
+        free(lines_indices);
 
 
         glCreateBuffers(1, &ubo);
@@ -249,8 +266,7 @@ realize(GtkWidget *widget, gpointer user_data)
         glVertexArrayAttribBinding(vao, 0, 0);
         glEnableVertexArrayAttrib(vao, 0);
 
-        glBindVertexBuffer(0, vbos[0], 0, sizeof (GLfloat[3]));
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbos[1]);
+        glBindVertexBuffer(0, vbo, 0, sizeof (GLfloat[3]));
 
 
         solver = pd_solver_alloc(mesh->positions, mesh->n_positions,
@@ -274,13 +290,11 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
         memcpy(positions_mapped, pd_solver_map_positions(solver), n_positions*3*sizeof *positions_mapped);
 
 
-        /*glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, NULL);*/
+        /*glDrawElements(GL_TRIANGLES, count_triangles, GL_UNSIGNED_INT, NULL);*/
 
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glPointSize(5.0f);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_LINES]);
+        glDrawElements(GL_LINES, lines_count, GL_UNSIGNED_INT, NULL);
         glDrawArrays(GL_POINTS, 0, n_positions);
-        glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, NULL);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
         return TRUE;
 }
@@ -295,7 +309,8 @@ unrealize(GtkWidget *widget, gpointer user_data)
         glDeleteProgram(programs[1]);
         glDeleteProgramPipelines(1, &pipeline);
         glDeleteVertexArrays(1, &vao);
-        glDeleteBuffers(2, vbos);
+        glDeleteBuffers(2, ebos);
+        glDeleteBuffers(1, &vbo);
         glDeleteBuffers(1, &ubo);
 }
 
