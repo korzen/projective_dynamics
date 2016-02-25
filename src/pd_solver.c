@@ -1,7 +1,7 @@
-#include <cassert>
-#include <cstdlib>
-#include <cstring>
-#include <ctgmath>
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+#include <tgmath.h>
 
 #include "pd_solver.h"
 
@@ -32,22 +32,22 @@ pd_solver_alloc(float const                   *positions,
                 struct PdConstraintSpring     *spring_constraints,
                 uint32_t const                 n_spring_constraints)
 {
-        struct PdSolver *solver = (struct PdSolver *)malloc(sizeof *solver);
-        solver->forces = (float *)malloc(3*n_positions*sizeof *solver->forces);
+        struct PdSolver *solver = malloc(sizeof *solver);
+        solver->forces = malloc(3*n_positions*sizeof *solver->forces);
 
-        solver->positions = (float *)malloc(3*n_positions*sizeof *positions);
+        solver->positions = malloc(3*n_positions*sizeof *positions);
         memcpy(solver->positions, positions, 3*n_positions*sizeof *positions);
-        solver->positions_last = (float *)malloc(3*n_positions*sizeof *positions);
+        solver->positions_last = malloc(3*n_positions*sizeof *positions);
         memcpy(solver->positions_last, positions, 3*n_positions*sizeof *positions);
         solver->n_points = n_positions;
 
         size_t const attachments_size = n_attachment_constraints*sizeof *solver->attachments;
-        solver->attachments = (struct PdConstraintAttachment *)malloc(attachments_size);
+        solver->attachments = malloc(attachments_size);
         memcpy(solver->attachments, attachment_constraints, attachments_size);
         solver->n_attachments = n_attachment_constraints;
 
         size_t const springs_size = n_spring_constraints*sizeof *solver->springs;
-        solver->springs = (struct PdConstraintSpring *)malloc(springs_size);
+        solver->springs = malloc(springs_size);
         memcpy(solver->springs, spring_constraints, springs_size);
         solver->n_springs = n_spring_constraints;
 

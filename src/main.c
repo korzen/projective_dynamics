@@ -92,8 +92,10 @@ esc_key_press_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
         guint keyval;
         gdk_event_get_keyval(event, &keyval);
 
-        if (keyval == GDK_KEY_Escape)
+        if (keyval == GDK_KEY_Escape) {
+                gtk_widget_destroy(widget);
                 gtk_main_quit();
+        }
 
         return TRUE;
 }
@@ -233,8 +235,12 @@ realize(GtkWidget *widget, gpointer user_data)
         ubo_mapped->model.c[2][2] = 0.0f;
 
         ubo_mapped->view       = MAT4;
+
+        float const near = -5.0f;
+        float const far  =  5.0f;
         ubo_mapped->projection = MAT4;
-        ubo_mapped->projection.c[2][2] = -1.0f;
+        ubo_mapped->projection.c[2][2] = -2.0f/(far - near);
+        ubo_mapped->projection.c[3][2] = -(far + near)/(far - near);
 
 
         glCreateVertexArrays(1, &vao);
@@ -260,8 +266,10 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         /* TODO: avoid memcpy by passing pointer to advance solver */
-        float const timestep = 1.0f/60.0f;
-        pd_solver_advance(solver, timestep);
+        int const n_iterations = 10;
+        float const timestep = 1.0f/(60.0f*n_iterations);
+        for (int i = 0; i < n_iterations; ++i)
+                pd_solver_advance(solver, timestep);
 
         memcpy(positions_mapped, pd_solver_map_positions(solver), n_positions*3*sizeof *positions_mapped);
 
@@ -281,13 +289,14 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
 static void
 unrealize(GtkWidget *widget, gpointer user_data)
 {
-        printf("destructing\n");
         gtk_gl_area_make_current(GTK_GL_AREA(widget));
 
         glDeleteProgram(programs[0]);
         glDeleteProgram(programs[1]);
         glDeleteProgramPipelines(1, &pipeline);
         glDeleteVertexArrays(1, &vao);
+        glDeleteBuffers(2, vbos);
+        glDeleteBuffers(1, &ubo);
 }
 
 

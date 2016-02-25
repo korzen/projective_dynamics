@@ -11,5 +11,5 @@ void
 main(void)
 {
         vec3 n = normalize(cross(dFdx(v_pos.xyz), dFdy(v_pos.xyz)));
-        color = vec4(1.0);
+        color = vec4(gl_FragCoord.z);
 }
