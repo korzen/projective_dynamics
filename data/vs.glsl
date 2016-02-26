@@ -12,10 +12,11 @@ layout(binding = 0, std140) uniform MatrixBlock {
 out vec4 v_pos;
 
 out gl_PerVertex {
-	vec4 gl_Position;
-	float gl_PointSize;
-	float gl_ClipDistance[];
+        vec4 gl_Position;
+        float gl_PointSize;
+        float gl_ClipDistance[];
 };
+
 
 void
 main(void)
