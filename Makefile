@@ -6,6 +6,7 @@ LDLIBS   = -lm
 
 
 all:
+	mkdir -p obj
 #	$(CC) $(CFLAGS) -c src/backed/pd_verlet.c -o obj/pd_solver.o
 	$(CXX) $(CXXFLAGS) `pkg-config --cflags eigen3` -c src/backend/pd_eigen.cpp -o obj/pd_solver.o
 	$(CC) $(CFLAGS) -c src/pd_io.c -o obj/pd_io.o
