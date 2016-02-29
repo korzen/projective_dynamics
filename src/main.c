@@ -284,7 +284,7 @@ realize(GtkWidget *widget, gpointer user_data)
         glUseProgramStages(pipeline, GL_FRAGMENT_SHADER_BIT, programs[1]);
 
 
-        struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(16, 16);
+        struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(32, 16);
         triangles_count = mesh->n_indices;
         n_positions = mesh->n_positions;
 
@@ -297,8 +297,8 @@ realize(GtkWidget *widget, gpointer user_data)
         glCreateBuffers(1, &vbo);
         glNamedBufferStorage(vbo, mesh->n_positions*3*sizeof *mesh->positions, mesh->positions, flags);
 
-        /* map position buffer, topology of mesh does not change */
-        positions_mapped = glMapNamedBufferRange(vbo, 0, mesh->n_positions*sizeof *mesh->positions, flags);
+        /* map position buffer, topology of mesh does not change so we do not map indices */
+        positions_mapped = glMapNamedBufferRange(vbo, 0, mesh->n_positions*3*sizeof *mesh->positions, flags);
 
 
         glCreateBuffers(N_EBOS, ebos);
@@ -364,7 +364,6 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
                 pd_solver_advance(solver, timestep);
 
         memcpy(positions_mapped, pd_solver_map_positions(solver), n_positions*3*sizeof *positions_mapped);
-
 
         /*glDrawElements(GL_TRIANGLES, count_triangles, GL_UNSIGNED_INT, NULL);*/
 

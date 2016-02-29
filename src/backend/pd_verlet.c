@@ -25,12 +25,12 @@ struct PdSolver {
 
 
 struct PdSolver *
-pd_solver_alloc(float const                   *positions,
-                uint32_t const                 n_positions,
-                struct PdConstraintAttachment *attachment_constraints,
-                uint32_t const                 n_attachment_constraints,
-                struct PdConstraintSpring     *spring_constraints,
-                uint32_t const                 n_spring_constraints)
+pd_solver_alloc(float const                         *positions,
+                uint32_t const                       n_positions,
+                struct PdConstraintAttachment const *attachment_constraints,
+                uint32_t const                       n_attachment_constraints,
+                struct PdConstraintSpring const     *spring_constraints,
+                uint32_t const                       n_spring_constraints)
 {
         struct PdSolver *solver = malloc(sizeof *solver);
         solver->forces = malloc(3*n_positions*sizeof *solver->forces);

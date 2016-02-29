@@ -108,6 +108,7 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
         /* create net */
         m->n_attachments  = 4;
         m->attachments    = malloc(m->n_attachments*sizeof *m->attachments);
+
         /*
         m->attachments[0] = (struct PdConstraintAttachment){ 0, { m->positions[0], m->positions[1], m->positions[2], }, };
         m->attachments[1] = (struct PdConstraintAttachment){ (n_x - 1), { m->positions[3*(n_x - 1)], m->positions[3*(n_x - 1) + 1], m->positions[3*(n_x - 1) + 2], }, };
@@ -117,6 +118,7 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
 
         m->attachments[2] = (struct PdConstraintAttachment){ (n_y - 1)*n_x, { -1.0f, 1.0f, 1.0f, }, };
         m->attachments[3] = (struct PdConstraintAttachment){ (n_x - 1) + (n_y - 1)*n_x, { 1.0f, 1.0f, 1.0f, }, };
+
 
         return m;
 }

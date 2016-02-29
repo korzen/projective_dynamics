@@ -6,5 +6,9 @@ LDLIBS   = -lm
 
 
 all:
-	$(CC) $(CFLAGS) -c src/pd_solver.c -o obj/pd_solver.o
-	$(CC) $(CFLAGS) obj/pd_solver.o src/pd_io.c src/pd_linalg.c src/main.c -o pd `pkg-config --libs gtk+-3.0 epoxy` $(LDLIBS)
+#	$(CC) $(CFLAGS) -c src/backed/pd_verlet.c -o obj/pd_solver.o
+	$(CXX) $(CXXFLAGS) `pkg-config --cflags eigen3` -c src/backend/pd_eigen.cpp -o obj/pd_solver.o
+	$(CC) $(CFLAGS) -c src/pd_io.c -o obj/pd_io.o
+	$(CC) $(CFLAGS) -c src/pd_linalg.c -o obj/pd_linalg.o
+	$(CC) $(CFLAGS) -c src/main.c -o obj/main.o
+	$(CXX) $(CFLAGS) obj/pd_solver.o obj/pd_io.o obj/pd_linalg.o obj/main.o -o pd `pkg-config --libs gtk+-3.0 epoxy` $(LDLIBS)
