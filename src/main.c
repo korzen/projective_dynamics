@@ -36,6 +36,9 @@ static struct {
 } *ubo_mapped;
 static struct PdSolver *solver;
 
+enum { n_iterations = 10, };
+static float const timestep = 1.0f/(60.0f*n_iterations);
+
 
 static quat_t
 mouse_quat(GtkWidget *widget, GdkEvent *event)
@@ -347,7 +350,8 @@ realize(GtkWidget *widget, gpointer user_data)
 
         solver = pd_solver_alloc(mesh->positions, mesh->n_positions,
                                  mesh->attachments, mesh->n_attachments,
-                                 mesh->springs, mesh->n_springs);
+                                 mesh->springs, mesh->n_springs,
+                                 timestep);
         pd_mesh_surface_free(mesh);
 }
 
@@ -357,12 +361,10 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
 {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        /* TODO: avoid memcpy by passing pointer to advance solver */
-        int const n_iterations = 10;
-        float const timestep = 1.0f/(60.0f*n_iterations);
         for (int i = 0; i < n_iterations; ++i)
-                pd_solver_advance(solver, timestep);
+                pd_solver_advance(solver);
 
+        /* TODO: avoid memcpy by passing pointer to advance solver */
         memcpy(positions_mapped, pd_solver_map_positions(solver), n_positions*3*sizeof *positions_mapped);
 
         /*glDrawElements(GL_TRIANGLES, count_triangles, GL_UNSIGNED_INT, NULL);*/

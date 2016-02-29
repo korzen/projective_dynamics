@@ -21,6 +21,8 @@ struct PdSolver {
 
         struct PdConstraintSpring *springs;
         uint32_t n_springs;
+
+        float t2;
 };
 
 
@@ -30,7 +32,8 @@ pd_solver_alloc(float const                         *positions,
                 struct PdConstraintAttachment const *attachment_constraints,
                 uint32_t const                       n_attachment_constraints,
                 struct PdConstraintSpring const     *spring_constraints,
-                uint32_t const                       n_spring_constraints)
+                uint32_t const                       n_spring_constraints,
+                float const                          timestep)
 {
         struct PdSolver *solver = malloc(sizeof *solver);
         solver->forces = malloc(3*n_positions*sizeof *solver->forces);
@@ -51,6 +54,8 @@ pd_solver_alloc(float const                         *positions,
         memcpy(solver->springs, spring_constraints, springs_size);
         solver->n_springs = n_spring_constraints;
 
+        solver->t2 = timestep*timestep;
+
         return solver;
 }
 
@@ -68,7 +73,7 @@ pd_solver_free(struct PdSolver *solver)
 
 /* first vertex is fixed */
 void
-pd_solver_advance(struct PdSolver *solver, float const timestep)
+pd_solver_advance(struct PdSolver *solver)
 {
         /* set external point forces */
         for (uint32_t i = 0; i < solver->n_points; ++i) {
@@ -81,7 +86,7 @@ pd_solver_advance(struct PdSolver *solver, float const timestep)
         for (uint32_t i = 0; i < 3*solver->n_points; ++i) {
                 float const tmp = solver->positions[i];
                 /* 2x - x' + a*t^2; x' is last position; assume mass of 1 */
-                solver->positions[i] += tmp - solver->positions_last[i] + solver->forces[i]*timestep*timestep;
+                solver->positions[i] += tmp - solver->positions_last[i] + solver->forces[i]*solver->t2;
                 solver->positions_last[i] = tmp;
         }
 

@@ -15,12 +15,15 @@ struct PdSolver {
         Eigen::SparseMatrix<float> mass_mat;
         Eigen::SparseMatrix<float> l_mat;
         Eigen::SparseMatrix<float> j_mat;
+        Eigen::SimplicialLLT<Eigen::SparseMatrix<float>, Eigen::Upper> llt;
 
         struct PdConstraintAttachment *attachments;
         uint32_t n_attachments;
 
         struct PdConstraintSpring *springs;
         uint32_t n_springs;
+
+        float t2;
 };
 
 
@@ -42,7 +45,8 @@ pd_solver_alloc(float const                         *positions,
                 struct PdConstraintAttachment const *attachments,
                 uint32_t const                       n_attachments,
                 struct PdConstraintSpring const     *springs,
-                uint32_t const                       n_springs)
+                uint32_t const                       n_springs,
+                float const                          timestep) /* no adaptive timestepping */
 {
         struct PdSolver *solver = new struct PdSolver;
 
@@ -130,6 +134,13 @@ pd_solver_alloc(float const                         *positions,
         }
 
 
+        solver->t2 = timestep*timestep;
+
+
+        /* prefactor the constant term (mesh topology/masses are fixed) */
+        solver->llt.compute(solver->mass_mat + solver->t2*solver->l_mat);
+
+
         return solver;
 }
 
@@ -142,7 +153,7 @@ pd_solver_free(struct PdSolver *solver)
 
 
 void
-pd_solver_advance(struct PdSolver *solver, float const timestep)
+pd_solver_advance(struct PdSolver *solver)
 {
         /* LOCAL STEP (we account everything except the global solve */
         struct timespec local_start;
@@ -181,7 +192,7 @@ pd_solver_advance(struct PdSolver *solver, float const timestep)
                  inertia and external force*timestep^2 and the multiply by mass
                  matrix */
         Eigen::VectorXf const y = 2.0f*solver->positions - solver->positions_last;
-        Eigen::VectorXf const b = solver->mass_mat*y + timestep*timestep*(solver->j_mat*d + ext_force);
+        Eigen::VectorXf const b = solver->mass_mat*y + solver->t2*(solver->j_mat*d + ext_force);
 
         /* TODO: this should not copy anything */
         solver->positions_last = solver->positions;
@@ -194,10 +205,7 @@ pd_solver_advance(struct PdSolver *solver, float const timestep)
         /* GLOBAL STEP */
         struct timespec global_start;
         clock_gettime(CLOCK_MONOTONIC, &global_start);
-
-        Eigen::SimplicialLLT<Eigen::SparseMatrix<float>, Eigen::Upper> llt_solver;
-        llt_solver.compute(solver->mass_mat + timestep*timestep*solver->l_mat);
-        solver->positions = llt_solver.solve(b);
+        solver->positions = solver->llt.solve(b);
 
         struct timespec global_end;
         clock_gettime(CLOCK_MONOTONIC, &global_end);

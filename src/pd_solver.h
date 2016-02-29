@@ -22,7 +22,8 @@ pd_solver_alloc(float const                         *positions,
                 struct PdConstraintAttachment const *attachment_constraints,
                 uint32_t const                       n_attachment_constraints,
                 struct PdConstraintSpring const     *spring_constraints,
-                uint32_t const                       n_spring_constraints);
+                uint32_t const                       n_spring_constraints,
+                float const                          timestep);
 
 
 void
@@ -30,7 +31,7 @@ pd_solver_free(struct PdSolver *solver);
 
 
 void
-pd_solver_advance(struct PdSolver *solver, float const timestep);
+pd_solver_advance(struct PdSolver *solver);
 
 
 float const *
