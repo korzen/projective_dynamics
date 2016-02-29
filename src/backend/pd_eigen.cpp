@@ -4,6 +4,8 @@
 #include <Eigen/Core>
 #include <Eigen/Sparse>
 
+#include "../pd_time.h"
+
 #include "../pd_solver.h"
 
 
@@ -142,6 +144,10 @@ pd_solver_free(struct PdSolver *solver)
 void
 pd_solver_advance(struct PdSolver *solver, float const timestep)
 {
+        /* LOCAL STEP (we account everything except the global solve */
+        struct timespec local_start;
+        clock_gettime(CLOCK_MONOTONIC, &local_start);
+
         float const gravity = -9.81f;
 
         /* compute external force */
@@ -180,9 +186,22 @@ pd_solver_advance(struct PdSolver *solver, float const timestep)
         /* TODO: this should not copy anything */
         solver->positions_last = solver->positions;
 
+        struct timespec local_end;
+        clock_gettime(CLOCK_MONOTONIC, &local_end);
+        printf("Local step: %f ms\n", pd_time_diff_ms(&local_start, &local_end));
+
+
+        /* GLOBAL STEP */
+        struct timespec global_start;
+        clock_gettime(CLOCK_MONOTONIC, &global_start);
+
         Eigen::SimplicialLLT<Eigen::SparseMatrix<float>, Eigen::Upper> llt_solver;
         llt_solver.compute(solver->mass_mat + timestep*timestep*solver->l_mat);
         solver->positions = llt_solver.solve(b);
+
+        struct timespec global_end;
+        clock_gettime(CLOCK_MONOTONIC, &global_end);
+        printf("Global step: %f ms\n", pd_time_diff_ms(&global_start, &global_end));
 }
 
 
