@@ -378,6 +378,18 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
 
 
 static void
+resize(GtkGLArea *area, gint width, gint height, gpointer user_data)
+{
+        glViewport(0, 0, width, height);
+
+        float const aspect = (float)width/height;
+
+        ubo_mapped->projection.c[0][0] = fmin(1.0f, 1.0f/aspect);
+        ubo_mapped->projection.c[1][1] = fmin(1.0f, aspect);
+}
+
+
+static void
 unrealize(GtkWidget *widget, gpointer user_data)
 {
         gtk_gl_area_make_current(GTK_GL_AREA(widget));
@@ -423,6 +435,7 @@ main(int argc, char **argv)
         g_signal_connect(gl_area, "motion-notify-event", G_CALLBACK(motion_notify_event), NULL);
         g_signal_connect(gl_area, "realize", G_CALLBACK(realize), NULL);
         g_signal_connect(gl_area, "render", G_CALLBACK(render), NULL);
+        g_signal_connect(gl_area, "resize", G_CALLBACK(resize), NULL);
         g_signal_connect(gl_area, "scroll-event", G_CALLBACK(scroll_event), NULL);
         g_signal_connect(gl_area, "unrealize", G_CALLBACK(unrealize), NULL);
 
