@@ -1,7 +1,7 @@
 CC       ?= gcc
 CXX      ?= g++
-CFLAGS   = -std=c11 -g -I./ -O3 -Wall -Wextra -fstrict-aliasing -march=native `pkg-config --cflags gtk+-3.0 epoxy`
-CXXFLAGS = -std=c++14 -g -O3 -Wall -Wextra -fstrict-aliasing -march=native
+CFLAGS   = -std=c11 -g -I./ -O3 -Wall -Wextra -fopenmp -fstrict-aliasing -march=native `pkg-config --cflags gtk+-3.0 epoxy`
+CXXFLAGS = -std=c++14 -g -O3 -Wall -Wextra -fopenmp -fstrict-aliasing -march=native
 LDLIBS   = -lm
 
 

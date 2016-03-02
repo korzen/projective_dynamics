@@ -24,6 +24,11 @@ struct PdSolver {
         uint32_t n_springs;
 
         float t2;
+
+        /* cumulative moving average for local and global time */
+        double   local_cma;
+        double   global_cma;
+        uint64_t n_iters;
 };
 
 
@@ -141,6 +146,11 @@ pd_solver_alloc(float const                         *positions,
         solver->llt.compute(solver->mass_mat + solver->t2*solver->l_mat);
 
 
+        solver->local_cma  = 0.0;
+        solver->global_cma = 0.0;
+        solver->n_iters    = 0;
+
+
         return solver;
 }
 
@@ -199,7 +209,6 @@ pd_solver_advance(struct PdSolver *solver)
 
         struct timespec local_end;
         clock_gettime(CLOCK_MONOTONIC, &local_end);
-        printf("Local step: %f ms\n", pd_time_diff_ms(&local_start, &local_end));
 
 
         /* GLOBAL STEP */
@@ -209,7 +218,16 @@ pd_solver_advance(struct PdSolver *solver)
 
         struct timespec global_end;
         clock_gettime(CLOCK_MONOTONIC, &global_end);
-        printf("Global step: %f ms\n", pd_time_diff_ms(&global_start, &global_end));
+
+        solver->local_cma = (pd_time_diff_ms(&local_start, &local_end) + solver->n_iters*solver->local_cma)/(solver->n_iters + 1);
+        solver->global_cma = (pd_time_diff_ms(&global_start, &global_end) + solver->n_iters*solver->global_cma)/(solver->n_iters + 1);
+
+        if (!(solver->n_iters % 1000)) {
+                printf("Local CMA: %f ms\n", solver->local_cma);
+                printf("Global CMA: %f ms\n\n", solver->global_cma);
+        }
+
+        ++solver->n_iters;
 }
 
 
