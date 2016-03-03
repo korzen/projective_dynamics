@@ -1,6 +1,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <vector>
+
 #include <Eigen/Core>
 #include <Eigen/Sparse>
 
@@ -61,13 +63,15 @@ pd_solver_alloc(float const                         *positions,
 
         /* initialize mass matrix */
         float const total_mass = 1.0f;
-        solver->mass_mat.resize(3*n_positions, 3*n_positions);
 
         /* TODO: not sure if bug in Eigen */
         /*solver->mass_mat.diagonal().setConstant(total_mass/n_positions);*/
+        std::vector<Eigen::Triplet<float>> triplets;
         for (uint32_t i = 0; i < n_positions; ++i)
                 for (int j = 0; j < 3; ++j)
-                solver->mass_mat.coeffRef(3*i + j, 3*i + j) = total_mass/n_positions;
+                        triplets.emplace_back(3*i + j, 3*i + j, total_mass/n_positions);
+        solver->mass_mat.resize(3*n_positions, 3*n_positions);
+        solver->mass_mat.setFromTriplets(std::begin(triplets), std::end(triplets));
 
 
         float const stiffness_attachment = 32.0f;
@@ -77,13 +81,13 @@ pd_solver_alloc(float const                         *positions,
         /* build L matrix; kAA^T (and Kronecker product to apply it to 3 vector */
         /* A is spring endpoints incidence matrix as weighted Laplacian matrix */
         /* https://en.wikipedia.org/wiki/Laplacian_matrix */
-        solver->l_mat.resize(3*n_positions, 3*n_positions);
+        triplets.clear();
 
         /* TODO: not really sure why it is diagonal matrix for attachments since it is stiffness*identity */
         for (uint32_t i = 0; i < n_attachments; ++i) {
                 struct PdConstraintAttachment const c = attachments[i];
                 for (int j = 0; j < 3; ++j)
-                        solver->l_mat.coeffRef(3*c.i + j, 3*c.i + j) += stiffness_attachment;
+                        triplets.emplace_back(3*c.i + j, 3*c.i + j, stiffness_attachment);
         }
         size_t const attachments_size = n_attachments*sizeof *solver->attachments;
         solver->attachments = (struct PdConstraintAttachment *)malloc(attachments_size);
@@ -91,19 +95,18 @@ pd_solver_alloc(float const                         *positions,
         solver->n_attachments = n_attachments;
 
         /* have to accumulate, since some entries were filled previously */
-        /* TODO: build triplets to avoid potential bugs */
         for (uint32_t i = 0; i < n_springs; ++i) {
                 struct PdConstraintSpring const c = springs[i];
                 for (int j = 0; j < 3; ++j) {
                         /* degree part of L matrix (D matrix) */
-                        solver->l_mat.coeffRef(3*c.i[0] + j, 3*c.i[0] + j) += stiffness_spring;
-                        solver->l_mat.coeffRef(3*c.i[1] + j, 3*c.i[1] + j) += stiffness_spring;
+                        triplets.emplace_back(3*c.i[0] + j, 3*c.i[0] + j, stiffness_spring);
+                        triplets.emplace_back(3*c.i[1] + j, 3*c.i[1] + j, stiffness_spring);
 
                         /* -incidence part of L matrix (A matrix) */
                         /* since it is simple digraph these are in fact stiffness*-A
                            where A is incidence matrix */
-                        solver->l_mat.coeffRef(3*c.i[0] + j, 3*c.i[1] + j) -= stiffness_spring;
-                        solver->l_mat.coeffRef(3*c.i[1] + j, 3*c.i[0] + j) -= stiffness_spring;
+                        triplets.emplace_back(3*c.i[0] + j, 3*c.i[1] + j, -stiffness_spring);
+                        triplets.emplace_back(3*c.i[1] + j, 3*c.i[0] + j, -stiffness_spring);
                 }
         }
         size_t const springs_size = n_springs*sizeof *solver->springs;
@@ -111,33 +114,33 @@ pd_solver_alloc(float const                         *positions,
         memcpy(solver->springs, springs, springs_size);
         solver->n_springs = n_springs;
 
+        solver->l_mat.resize(3*n_positions, 3*n_positions);
+        solver->l_mat.setFromTriplets(std::begin(triplets), std::end(triplets));
+
 
         /* build J matrix; TODO: explain what the matrix captures */
         /* from paper it is equation 12 */
         /* "ORDER" MUST BE PRESERVED */
-        uint32_t const n_constraints = n_attachments + n_springs;
-        solver->j_mat.resize(3*n_positions, 3*n_constraints);
+        triplets.clear();
 
-        /* TODO: building triples may be faster */
         uint32_t offset = 0;
         for (uint32_t i = 0; i < n_attachments; ++i, ++offset) {
                 struct PdConstraintAttachment const c = attachments[i];
-                /* TODO: what stiffness for attachment? */
-                solver->j_mat.coeffRef(3*c.i, 3*offset) = stiffness_attachment;
-                solver->j_mat.coeffRef(3*c.i + 1, 3*offset + 1) = stiffness_attachment;
-                solver->j_mat.coeffRef(3*c.i + 2, 3*offset + 2) = stiffness_attachment;
+                for (int j = 0; j < 3; ++j)
+                        triplets.emplace_back(3*c.i + j, 3*offset + j, stiffness_attachment);
         }
 
         for (uint32_t i = 0; i < n_springs; ++i, ++offset) {
                 struct PdConstraintSpring const c = springs[i];
                 for (int e = 0; e < 2; ++e) {
                         float const k = e ? stiffness_spring : -stiffness_spring;
-                        solver->j_mat.coeffRef(3*c.i[e], 3*offset) = k;
-                        solver->j_mat.coeffRef(3*c.i[e] + 1, 3*offset + 1) = k;
-                        solver->j_mat.coeffRef(3*c.i[e] + 2, 3*offset + 2) = k;
+                        for (int j = 0; j < 3; ++j)
+                                triplets.emplace_back(3*c.i[e] + j, 3*offset + j, k);
                 }
         }
-
+        uint32_t const n_constraints = n_attachments + n_springs;
+        solver->j_mat.resize(3*n_positions, 3*n_constraints);
+        solver->j_mat.setFromTriplets(std::begin(triplets), std::end(triplets));
 
         solver->t2 = timestep*timestep;
 
