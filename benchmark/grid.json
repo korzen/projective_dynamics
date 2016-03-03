@@ -33,5 +33,19 @@
                 "local_cma": 11.933,
                 "global_cma": 62.984,
                 "unit": "ms"
+        },
+        {
+                "n_x": 512,
+                "n_y": 512,
+                "local_cma": 48.423,
+                "global_cma": 325.380,
+                "unit": "ms"
+        },
+        {
+                "n_x": 1024,
+                "n_y": 1024,
+                "local_cma": 235.420,
+                "global_cma": 1435.138,
+                "unit": "ms"
         }
 ]
