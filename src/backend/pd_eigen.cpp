@@ -161,6 +161,8 @@ pd_solver_alloc(float const                         *positions,
 void
 pd_solver_free(struct PdSolver *solver)
 {
+        free(solver->attachments);
+        free(solver->springs);
         delete solver;
 }
 
