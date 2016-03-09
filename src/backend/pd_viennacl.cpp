@@ -123,11 +123,11 @@ pd_solver_alloc(float const                         *positions,
         }
         for (const auto &c : solver->springs){
                 for (size_t j = 0; j < 3; ++j){
-                        build_sparse_mat[3 * c.i[0] + j][3 * c.i[0] + j] += stiffness_attachment;
-                        build_sparse_mat[3 * c.i[1] + j][3 * c.i[1] + j] += stiffness_attachment;
+                        build_sparse_mat[3 * c.i[0] + j][3 * c.i[0] + j] += stiffness_spring;
+                        build_sparse_mat[3 * c.i[1] + j][3 * c.i[1] + j] += stiffness_spring;
 
-                        build_sparse_mat[3 * c.i[0] + j][3 * c.i[1] + j] -= stiffness_attachment;
-                        build_sparse_mat[3 * c.i[1] + j][3 * c.i[0] + j] -= stiffness_attachment;
+                        build_sparse_mat[3 * c.i[0] + j][3 * c.i[1] + j] -= stiffness_spring;
+                        build_sparse_mat[3 * c.i[1] + j][3 * c.i[0] + j] -= stiffness_spring;
                 }
         }
         // Scale all attachments by time squared
