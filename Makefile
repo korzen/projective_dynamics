@@ -7,8 +7,6 @@ EIGEN3   = `pkg-config --cflags eigen3`
 
 
 all: build_dir pd
-
-pd:
 	$(CXX) $(CXXFLAGS) $(EIGEN3) -c src/backend/pd_eigen.cpp -o obj/pd_solver.o
 	$(CC) $(CFLAGS) -c src/pd_io.c -o obj/pd_io.o
 	$(CC) $(CFLAGS) -c src/pd_linalg.c -o obj/pd_linalg.o
