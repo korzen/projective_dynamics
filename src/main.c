@@ -287,7 +287,7 @@ realize(GtkWidget *widget, gpointer user_data)
         glUseProgramStages(pipeline, GL_FRAGMENT_SHADER_BIT, programs[1]);
 
 
-        struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(32, 16);
+        struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(128, 128);
         triangles_count = mesh->n_indices;
         n_positions = mesh->n_positions;
 
