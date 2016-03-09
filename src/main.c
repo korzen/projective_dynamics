@@ -36,8 +36,10 @@ static struct {
 } *ubo_mapped;
 static struct PdSolver *solver;
 
-enum { n_iterations = 10, resolution = 16, };
+enum { n_iterations = 10, };
 static float const timestep = 1.0f/(60.0f*n_iterations);
+static uint32_t resolution_x = 16;
+static uint32_t resolution_y = 16;
 
 
 static quat_t
@@ -287,7 +289,7 @@ realize(GtkWidget *widget, gpointer user_data)
         glUseProgramStages(pipeline, GL_FRAGMENT_SHADER_BIT, programs[1]);
 
 
-        struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(resolution, resolution);
+        struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(resolution_x, resolution_y);
         triangles_count = mesh->n_indices;
         n_positions = mesh->n_positions;
 
@@ -415,6 +417,11 @@ animate(GtkWidget *widget, GdkFrameClock *frame_clock, gpointer user_data)
 int
 main(int argc, char **argv)
 {
+        if (argc > 2) {
+                resolution_x = atoi(argv[1]);
+                resolution_y = atoi(argv[2]);
+        }
+
         gtk_init(&argc, &argv);
 
         GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
