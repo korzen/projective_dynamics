@@ -36,8 +36,8 @@ static struct {
 } *ubo_mapped;
 static struct PdSolver *solver;
 
-enum { n_iterations = 10, };
-static float const timestep = 1.0f/(60.0f*n_iterations);
+static uint32_t n_iterations = 10;
+static float timestep = 1.0f/(60.0f*10);
 static uint32_t resolution_x = 16;
 static uint32_t resolution_y = 16;
 
@@ -420,6 +420,14 @@ main(int argc, char **argv)
         if (argc > 2) {
                 resolution_x = atoi(argv[1]);
                 resolution_y = atoi(argv[2]);
+        }
+        if (argc > 3){
+                n_iterations = atoi(argv[3]);
+                if (n_iterations == 0){
+                        printf("iteration count must be > 0! Forcing to 1\n");
+                        n_iterations = 1;
+                }
+                timestep = 1.0f/(60.0f*n_iterations);
         }
 
         gtk_init(&argc, &argv);
