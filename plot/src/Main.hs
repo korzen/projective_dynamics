@@ -7,6 +7,7 @@ import qualified Data.ByteString.Lazy as BL
 import GHC.Generics
 import Graphics.Rendering.Chart.Easy
 import Graphics.Rendering.Chart.Backend.Cairo
+import System.Environment (getArgs)
 
 
 data Unit = Ms
@@ -37,20 +38,22 @@ parseRuns :: BL.ByteString -> Maybe [Run]
 parseRuns = A.decode
 
 
-plotRuns :: [Run] -> IO ()
-plotRuns xs = toFile def "grid.png" $ do
-        layout_title .= "Mesh Grid Simulation Time Global/Local Ratio"
+plotRuns :: FilePath -> [Run] -> IO ()
+plotRuns output xs = toFile def output $ do
+        layout_title .= "Mesh Grid Simulation"
         layout_x_axis . laxis_title .= "#vertices"
-        layout_y_axis . laxis_title .= "ratio"
-        plot (line "global/local" [run xs])
-
-run :: [Run] -> [(Double, Double)]
-run xs = [(fromIntegral (nX x*nY x), globalCMA x/localCMA x) | x <- xs]
+        layout_y_axis . laxis_title .= "time (ms)"
+--        plot (line "global/local" [fmap (f (\x -> globalCMA x/localCMA x)) xs])
+        plot (line "global" [fmap (f globalCMA) xs])
+        plot (line "local" [fmap (f localCMA) xs])
+        where f :: (Run -> Double) -> Run -> (Double, Double)
+              f g x = (fromIntegral (nX x*nY x), g x)
 
 
 main :: IO ()
 main = do
-        xs <- BL.readFile "../benchmark/grid.json"
+        [input, output] <- getArgs
+        xs <- BL.readFile input
         case parseRuns xs of
-                Just runs -> plotRuns runs
+                Just runs -> plotRuns output runs
                 Nothing   -> putStrLn "Failed to parse file"
