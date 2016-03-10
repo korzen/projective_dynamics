@@ -9,6 +9,8 @@
 #include "../pd_time.h"
 #include "../pd_solver.h"
 
+#define USE_CUSTOM_KERNELS 1
+
 // ViennaCL doesn't have small host vectors so we need a lightweight
 // vec3f type to do some constraint computation
 struct vec3f {
@@ -50,7 +52,10 @@ struct PdSolver {
         viennacl::compressed_matrix<float> a_mat;
 
         std::vector<PdConstraintAttachment> attachments;
+        viennacl::vector<float> attachment_pos;
         std::vector<PdConstraintSpring> springs;
+        viennacl::vector<int> spring_indices;
+        viennacl::vector<float> spring_rest_lengths;
 
         float t2;
 
@@ -104,10 +109,36 @@ pd_solver_alloc(float const                         *positions,
         solver->attachments.reserve(n_attachment_constraints);
         std::copy(attachment_constraints, attachment_constraints + n_attachment_constraints,
                 std::back_inserter(solver->attachments));
+        solver->attachment_pos = viennacl::vector<float>(3 * n_attachment_constraints);
+        {
+                std::vector<float> vf_build;
+                vf_build.reserve(3 * n_attachment_constraints);
+                for (const auto &c : solver->attachments){
+                        vf_build.push_back(c.position[0]);
+                        vf_build.push_back(c.position[1]);
+                        vf_build.push_back(c.position[2]);
+                }
+                viennacl::copy(vf_build.begin(), vf_build.end(), solver->attachment_pos.begin());
+        }
 
         solver->springs.reserve(n_spring_constraints);
         std::copy(spring_constraints, spring_constraints + n_spring_constraints,
                 std::back_inserter(solver->springs));
+        solver->spring_indices = viennacl::vector<int>(2 * n_spring_constraints);
+        solver->spring_rest_lengths = viennacl::vector<float>(n_spring_constraints);
+        {
+                std::vector<int> vi_build;
+                vi_build.reserve(2 * n_spring_constraints);
+                std::vector<float> vf_build;
+                vf_build.reserve(n_spring_constraints);
+                for (const auto &c : solver->springs){
+                        vi_build.push_back(c.i[0]);
+                        vi_build.push_back(c.i[1]);
+                        vf_build.push_back(c.rest_length);
+                }
+                viennacl::copy(vi_build.begin(), vi_build.end(), solver->spring_indices.begin());
+                viennacl::copy(vf_build.begin(), vf_build.end(), solver->spring_rest_lengths.begin());
+        }
 
         // This is actually building and solving the fast mass spring system not the projective
         // dynamics system. How different are they?
@@ -180,25 +211,83 @@ pd_solver_free(struct PdSolver *solver)
         delete solver;
 }
 
+#if defined(VIENNACL_WITH_CUDA) && USE_CUSTOM_KERNELS
+// Kernel to set up the external acceleration vector
+__global__ void set_external_acceleration(float *out, const int size){
+        float const gravity = -9.81f;
+        const int i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i < size){
+                out[3 * i] = 0.0f;
+                out[3 * i + 1] = 0.0f;
+                out[3 * i + 2] = gravity;
+        }
+}
+// Kernel to set the position attachment constraints
+__global__ void set_attachment_constraints(const float * __restrict__ attachments, float *out, const int size){
+        const int i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i < size){
+                out[3 * i] = attachments[3 * i];
+                out[3 * i + 1] = attachments[3 * i + 1];
+                out[3 * i + 2] = attachments[3 * i + 2];
+        }
+}
+// TODO WILL: These functions aren't provided by CUDA?
+__device__ float3 operator-(const float3 a, const float3 b){
+        return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+__device__ float3 operator*(const float3 a, const float s){
+        return make_float3(a.x * s, a.y * s, a.z * s);
+}
+__device__ float3 normalize(const float3 a){
+        float len = rsqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+        return make_float3(a.x * len, a.y * len, a.z * len);
+}
+// Kernel to set the spring constraints
+__global__ void set_spring_constraints(const float * __restrict__ positions, const int * __restrict__ indices,
+        const float * __restrict__ lengths, const int offset, float * __restrict__ out, const int size)
+{
+        const int i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i < size){
+                const int a = indices[2 * i];
+                const int b = indices[2 * i + 1];
+                const float3 pa = make_float3(positions[3 * a], positions[3 * a + 1], positions[3 * a + 2]);
+                const float3 pb = make_float3(positions[3 * b], positions[3 * b + 1], positions[3 * b + 2]);
+                const float3 v = normalize(pb - pa) * lengths[i];
+                out[3 * (i + offset)] = v.x;
+                out[3 * (i + offset) + 1] = v.y;
+                out[3 * (i + offset) + 2] = v.z;
+        }
+}
+
+#endif
+
 void
 pd_solver_advance(struct PdSolver *solver){
         /* LOCAL STEP (we account everything except the global solve */
         struct timespec local_start;
         clock_gettime(CLOCK_MONOTONIC, &local_start);
 
-        float const gravity = -9.81f;
 
         // Compute external forces (gravity)
         std::vector<float> vec_build(solver->positions.size(), 0.0f);
+        viennacl::vector<float> ext_force(solver->positions.size());
+#if !defined(VIENNACL_WITH_CUDA) || !USE_CUSTOM_KERNELS
+        // TODO: For OpenCL we need to also write these init kernels
+        float const gravity = -9.81f;
         for (size_t i = 0; i < solver->positions.size() / 3; ++i){
                 vec_build[3 * i + 2] = gravity;
         }
-        viennacl::vector<float> ext_force(solver->positions.size());
         viennacl::copy(vec_build.begin(), vec_build.end(), ext_force.begin());
+#else
+        set_external_acceleration<<<(solver->positions.size() / 3) / 32 + 1, 32>>>(viennacl::cuda_arg(ext_force),
+                solver->positions.size() / 3);
+#endif
         ext_force = viennacl::linalg::prod(solver->mass_mat, ext_force);
 
         // Setup the constraints vector
         size_t const n_constraints = solver->attachments.size() + solver->springs.size();
+        viennacl::vector<float> d(3 * n_constraints);
+#if !defined(VIENNACL_WITH_CUDA) || !USE_CUSTOM_KERNELS
         vec_build.clear();
         vec_build.resize(3 * n_constraints, 0);
         size_t offset = 0;
@@ -219,8 +308,15 @@ pd_solver_advance(struct PdSolver *solver){
                 }
                 ++offset;
         }
-        viennacl::vector<float> d(vec_build.size());
         viennacl::copy(vec_build.begin(), vec_build.end(), d.begin());
+#else
+        set_attachment_constraints<<<solver->attachments.size() / 32 + 1, 32>>>(viennacl::cuda_arg(solver->attachment_pos),
+                    viennacl::cuda_arg(d), solver->attachments.size());
+
+        set_spring_constraints<<<solver->springs.size() / 32 + 1, 32>>>(viennacl::cuda_arg(solver->positions),
+                viennacl::cuda_arg(solver->spring_indices), viennacl::cuda_arg(solver->spring_rest_lengths),
+                solver->attachments.size(), viennacl::cuda_arg(d), solver->springs.size());
+#endif
 
         viennacl::vector<float> y = 2.0f * solver->positions - solver->positions_last;
         viennacl::vector<float> b = viennacl::linalg::prod(solver->mass_mat, y) + solver->t2
@@ -243,7 +339,7 @@ pd_solver_advance(struct PdSolver *solver){
         solver->local_cma = (pd_time_diff_ms(&local_start, &local_end) + solver->n_iters*solver->local_cma)/(solver->n_iters + 1);
         solver->global_cma = (pd_time_diff_ms(&global_start, &global_end) + solver->n_iters*solver->global_cma)/(solver->n_iters + 1);
 
-        if (!(solver->n_iters % 1000)) {
+        if (solver->n_iters && !(solver->n_iters % 1000)) {
                 printf("Local CMA: %f ms\n", solver->local_cma);
                 printf("Global CMA: %f ms\n\n", solver->global_cma);
         }
