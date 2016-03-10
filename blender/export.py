@@ -75,7 +75,7 @@ def export(context, props, filepath):
 
 class PDExport(bpy.types.Operator, ExportHelper):
         bl_idname = "export_scene.pd_export"
-        bl_label = "Projective Dynamics Export"
+        bl_label = "Export PD"
         filename_ext = ".json"
 
         def execute(self, context):
