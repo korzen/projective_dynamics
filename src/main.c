@@ -396,6 +396,8 @@ unrealize(GtkWidget *widget, gpointer user_data)
 {
         gtk_gl_area_make_current(GTK_GL_AREA(widget));
 
+        pd_solver_free(solver);
+
         glDeleteProgram(programs[0]);
         glDeleteProgram(programs[1]);
         glDeleteProgramPipelines(1, &pipeline);
