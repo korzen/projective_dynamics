@@ -20,9 +20,9 @@ def convert_matrix(mat):
 
 # TODO: assume mesh was triangulated
 def convert_mesh(mesh):
-        vertices  = [v.co[:] for v in mesh.data.vertices]
-        simplices = [s.vertices[:] for s in list(mesh.data.polygons)]
-        pinned    = []
+        vertices    = [v.co[:] for v in mesh.data.vertices]
+        indices     = [s.vertices[:] for s in list(mesh.data.polygons)]
+        attachments = []
 
         cloth_modifiers = [m for m in mesh.modifiers if m.type == "CLOTH"]
         if cloth_modifiers:
@@ -30,12 +30,16 @@ def convert_mesh(mesh):
             group = cloth.settings.vertex_group_mass
             if cloth.settings.use_pin_cloth and group != "":
                 index = mesh.vertex_groups[group].index
-                pinned = [i for i, v in enumerate(mesh.data.vertices) for g in v.groups if g.group == index]
+                attachments = [i for i, v in enumerate(mesh.data.vertices) for g in v.groups if g.group == index]
+
+        # in case of triangle mesh, springs are just edge set
+        springs = [list(e.vertices) for e in mesh.data.edges]
 
         return {
-                "vertices":  vertices,
-                "simplices": simplices,
-                "pinned": pinned
+                "vertices":    vertices,
+                "indices":     indices,
+                "attachments": attachments,
+                "springs":     springs
         }
 
 
