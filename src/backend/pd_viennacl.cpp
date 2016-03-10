@@ -339,7 +339,7 @@ pd_solver_advance(struct PdSolver *solver){
         solver->local_cma = (pd_time_diff_ms(&local_start, &local_end) + solver->n_iters*solver->local_cma)/(solver->n_iters + 1);
         solver->global_cma = (pd_time_diff_ms(&global_start, &global_end) + solver->n_iters*solver->global_cma)/(solver->n_iters + 1);
 
-        if (solver->n_iters && !(solver->n_iters % 1000)) {
+        if (solver->n_iters && !(solver->n_iters % 500)) {
                 printf("Local CMA: %f ms\n", solver->local_cma);
                 printf("Global CMA: %f ms\n\n", solver->global_cma);
         }

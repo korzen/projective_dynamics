@@ -2,50 +2,50 @@
         {
                 "n_x": 16,
                 "n_y": 16,
-                "local_cma": 0.174,
-                "global_cma": 0.310,
+                "local_cma": 0.133,
+                "global_cma": 0.329,
                 "unit": "ms"
         },
         {
                 "n_x": 32,
                 "n_y": 32,
-                "local_cma": 0.2379,
-                "global_cma": 0.52,
+                "local_cma": 0.133,
+                "global_cma": 0.536,
                 "unit": "ms"
         },
         {
                 "n_x": 64,
                 "n_y": 64,
-                "local_cma": 0.466,
-                "global_cma": 0.599,
+                "local_cma": 0.140,
+                "global_cma": 0.652,
                 "unit": "ms"
         },
         {
                 "n_x": 128,
                 "n_y": 128,
-                "local_cma": 1.615,
-                "global_cma": 1.261,
+                "local_cma": 0.256,
+                "global_cma": 1.39,
                 "unit": "ms"
         },
         {
                 "n_x": 256,
                 "n_y": 256,
-                "local_cma": 5.98,
-                "global_cma": 5.72,
+                "local_cma": 0.829,
+                "global_cma": 5.77,
                 "unit": "ms"
         },
         {
                 "n_x": 512,
                 "n_y": 512,
-                "local_cma": 22.06,
-                "global_cma": 35.45,
+                "local_cma": 1.45,
+                "global_cma": 35.36,
                 "unit": "ms"
         },
         {
                 "n_x": 1024,
                 "n_y": 1024,
-                "local_cma": 87.089,
-                "global_cma": 270.28,
+                "local_cma": 4.76,
+                "global_cma": 269.31,
                 "unit": "ms"
         }
 ]
