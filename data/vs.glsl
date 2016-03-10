@@ -21,6 +21,6 @@ out gl_PerVertex {
 void
 main(void)
 {
-        v_pos = view*model*vec4(pos, 1.0);
-        gl_Position = projection*v_pos;
+        v_pos = model*vec4(pos, 1.0);
+        gl_Position = projection*view*v_pos;
 }
