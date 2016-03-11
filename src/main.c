@@ -450,7 +450,7 @@ main(int argc, char **argv)
 
         GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
         gtk_widget_add_events(window, GDK_KEY_PRESS_MASK);
-        g_signal_connect_swapped(window, "delete-event", G_CALLBACK(gtk_widget_destroy), window);
+        g_signal_connect_swapped(window, "delete-event", G_CALLBACK(gtk_main_quit), NULL);
         g_signal_connect(window, "key-press-event", G_CALLBACK(esc_key_press_event), NULL);
 
         /* set up GL window */
