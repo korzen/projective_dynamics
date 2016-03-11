@@ -5,6 +5,8 @@
 #include <assert.h>
 #include <tgmath.h>
 
+#include <jsmn/jsmn.h>
+
 #include "pd_constraint.h"
 
 
@@ -122,6 +124,110 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
 
         return m;
 }
+
+
+static int
+json_eq(char const *json, jsmntok_t const *tok, char const *str)
+{
+        return tok->type == JSMN_STRING && tok->end - tok->start == strlen(str) && !strncmp(json + tok->start, str, tok->end - tok->start);
+}
+
+
+static int
+parse_attachment(struct PdConstraintAttachment *a, char const *json, jsmntok_t *t, int i, int const r)
+{
+        for (int done = 0; i < r && done < 2; ++i) {
+                if (json_eq(json, t + i, "i")) {
+                        a->i = strtoul(json + t[++i].start, NULL, 10);
+                        ++done;
+                } else if (json_eq(json, t + i, "position")) {
+                        ++i;
+                        for (int j = 0; j < 3; ++j)
+                                a->position[j] = strtof(json + t[++i].start, NULL);
+                        ++done;
+                }
+        }
+        return i;
+}
+
+
+static int
+parse_spring(struct PdConstraintSpring *a, char const *json, jsmntok_t *t, int i, int const r)
+{
+        for (int done = 0; i < r && done < 2; ++i) {
+                if (json_eq(json, t + i, "i")) {
+                        ++i;
+                        for (int j = 0; j < 2; ++j)
+                                a->i[j] = strtoul(json + t[++i].start, NULL, 10);
+                        ++done;
+                } else if (json_eq(json, t + i, "rest_length")) {
+                        a->rest_length = strtof(json + t[++i].start, NULL);
+                        ++done;
+                }
+        }
+        return i;
+}
+
+
+struct PdMeshSurface *
+pd_mesh_surface_mk_from_json(char const *json)
+{
+        jsmn_parser parser;
+        jsmn_init(&parser);
+
+        jsmntok_t t[1 << 16];
+        int const r = jsmn_parse(&parser, json, strlen(json), t, sizeof t/sizeof t[0]);
+        if (r < 0) {
+                puts("problem parsing the data");
+                puts("not enough tokens :/");
+                return NULL;
+        }
+
+        struct PdMeshSurface *m = malloc(sizeof *m);
+        m->n_positions   = 0;
+        m->n_indices     = 0;
+        m->n_attachments = 0;
+        m->n_springs     = 0;
+
+
+        for (int i = 0; i < r;) {
+                if (json_eq(json, t + i, "attachments")) {
+                        m->n_attachments = t[++i].size;
+                        m->attachments   = malloc(m->n_attachments*sizeof *m->attachments);
+
+                        for (uint32_t o = 0; o < m->n_attachments; ++o)
+                                i = parse_attachment(m->attachments + o, json, t, i, r);
+                } else if (json_eq(json, t + i, "indices")) {
+                        m->n_indices = 3*t[++i].size;
+                        m->indices   = malloc(m->n_indices*sizeof *m->indices);
+
+                        uint32_t o = 0;
+                        for (++i; i < r && t[i].type == JSMN_ARRAY; ++i) {
+                                for (int j = 0; j < 3; ++j, ++o)
+                                        m->indices[o] = strtoul(json + t[++i].start, NULL, 10);
+                        }
+                } else if (json_eq(json, t + i, "springs")) {
+                        m->n_springs = t[++i].size;
+                        m->springs   = malloc(m->n_springs*sizeof *m->springs);
+
+                        for (uint32_t o = 0; o < m->n_springs; ++o)
+                                i = parse_spring(m->springs + o, json, t, i, r);
+                } else if (json_eq(json, t + i, "vertices")) {
+                        m->n_positions = t[++i].size;
+                        m->positions   = malloc(3*m->n_positions*sizeof *m->positions);
+
+                        uint32_t o = 0;
+                        for (++i; i < r && t[i].type == JSMN_ARRAY; ++i) {
+                                for (int j = 0; j < 3; ++j, ++o)
+                                        m->positions[o] = strtof(json + t[++i].start, NULL);
+                        }
+                } else
+                        ++i;
+        }
+
+        return m;
+}
+
 
 
 void

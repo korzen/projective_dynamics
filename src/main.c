@@ -40,6 +40,7 @@ static uint32_t n_iterations = 10;
 static float timestep = 1.0f/(60.0f*10);
 static uint32_t resolution_x = 16;
 static uint32_t resolution_y = 16;
+static char *mesh_filename;
 
 
 static quat_t
@@ -288,8 +289,17 @@ realize(GtkWidget *widget, gpointer user_data)
         glUseProgramStages(pipeline, GL_VERTEX_SHADER_BIT, programs[0]);
         glUseProgramStages(pipeline, GL_FRAGMENT_SHADER_BIT, programs[1]);
 
+        struct PdMeshSurface *mesh;
+        if (mesh_filename){
+                char *str = pk_io_read_file(mesh_filename);
+                assert(str);
+                mesh = pd_mesh_surface_mk_from_json(str);
+                free(str);
+        } else
+                mesh = pd_mesh_surface_mk_grid(resolution_x, resolution_y);
 
-        struct PdMeshSurface *mesh = pd_mesh_surface_mk_grid(resolution_x, resolution_y);
+        assert(mesh);
+
         triangles_count = mesh->n_indices;
         n_positions = mesh->n_positions;
 
@@ -363,13 +373,16 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
 {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        for (int i = 0; i < n_iterations; ++i)
+        for (uint32_t i = 0; i < n_iterations; ++i)
                 pd_solver_advance(solver);
 
         /* TODO: avoid memcpy by passing pointer to advance solver */
         memcpy(positions_mapped, pd_solver_map_positions(solver), n_positions*3*sizeof *positions_mapped);
 
-        /*glDrawElements(GL_TRIANGLES, count_triangles, GL_UNSIGNED_INT, NULL);*/
+/*
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_TRIANGLES]);
+        glDrawElements(GL_TRIANGLES, triangles_count, GL_UNSIGNED_INT, NULL);
+*/
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_LINES]);
         glDrawElements(GL_LINES, lines_count, GL_UNSIGNED_INT, NULL);
@@ -423,7 +436,7 @@ main(int argc, char **argv)
                 resolution_x = atoi(argv[1]);
                 resolution_y = atoi(argv[2]);
         }
-        if (argc > 3){
+        if (argc > 3) {
                 n_iterations = atoi(argv[3]);
                 if (n_iterations == 0){
                         printf("iteration count must be > 0! Forcing to 1\n");
@@ -431,6 +444,9 @@ main(int argc, char **argv)
                 }
                 timestep = 1.0f/(60.0f*n_iterations);
         }
+        /* TODO: res does not make sense to specify above */
+        if (argc > 4)
+                mesh_filename = argv[4];
 
         gtk_init(&argc, &argv);
 
