@@ -30,10 +30,10 @@ def convert_mesh(mesh):
             group = cloth.settings.vertex_group_mass
             if cloth.settings.use_pin_cloth and group != "":
                 index = mesh.vertex_groups[group].index
-                attachments = [i for i, v in enumerate(mesh.data.vertices) for g in v.groups if g.group == index]
+                attachments = [{ "i": i, "position": vertices[i] }  for i, v in enumerate(mesh.data.vertices) for g in v.groups if g.group == index]
 
         # in case of triangle mesh, springs are just edge set
-        springs = [list(e.vertices) for e in mesh.data.edges]
+        springs = [{ "i": list(e.vertices), "rest_length": (mesh.data.vertices[e.vertices[0]].co - mesh.data.vertices[e.vertices[1]].co).length } for e in mesh.data.edges]
 
         return {
                 "vertices":    vertices,
