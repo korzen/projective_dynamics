@@ -379,10 +379,8 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
         /* TODO: avoid memcpy by passing pointer to advance solver */
         memcpy(positions_mapped, pd_solver_map_positions(solver), n_positions*3*sizeof *positions_mapped);
 
-/*
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_TRIANGLES]);
         glDrawElements(GL_TRIANGLES, triangles_count, GL_UNSIGNED_INT, NULL);
-*/
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_LINES]);
         glDrawElements(GL_LINES, lines_count, GL_UNSIGNED_INT, NULL);
