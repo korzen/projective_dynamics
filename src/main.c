@@ -299,6 +299,7 @@ realize(GtkWidget *widget, gpointer user_data)
                 mesh = pd_mesh_surface_mk_grid(resolution_x, resolution_y);
 
         assert(mesh);
+        pd_mesh_print_info(mesh);
 
         triangles_count = mesh->n_indices;
         n_positions = mesh->n_positions;

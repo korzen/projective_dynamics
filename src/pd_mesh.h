@@ -175,8 +175,9 @@ pd_mesh_surface_mk_from_json(char const *json)
         jsmn_parser parser;
         jsmn_init(&parser);
 
-        jsmntok_t t[1 << 16];
-        int const r = jsmn_parse(&parser, json, strlen(json), t, sizeof t/sizeof t[0]);
+        size_t const n_tokens = 1 << 20;
+        jsmntok_t *t = malloc(n_tokens*sizeof *t);
+        int const r = jsmn_parse(&parser, json, strlen(json), t, n_tokens);
         if (r < 0) {
                 puts("problem parsing the data");
                 puts("not enough tokens :/");
@@ -224,10 +225,20 @@ pd_mesh_surface_mk_from_json(char const *json)
                 } else
                         ++i;
         }
+        free(t);
 
         return m;
 }
 
+
+void
+pd_mesh_print_info(struct PdMeshSurface const *m)
+{
+        printf("n_attachments %u\n", m->n_attachments);
+        printf("n_indices     %u\n", m->n_indices);
+        printf("n_positions   %u\n", m->n_positions);
+        printf("n_springs     %u\n", m->n_springs);
+}
 
 
 void
