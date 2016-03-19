@@ -1,0 +1,174 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath,amsfonts}
+
+\begin{document}
+
+\title{Project Notes}
+\author{Pavol Klacansky, Will Usher}
+\maketitle
+
+\section{Projective Dynamics Notes}
+
+It sounds like they implement the projective implicit Euler solver? So we're minimizing
+
+\begin{align}
+	\frac{1}{2 h^2} || M^{1/2} (q - s_n) ||^2_F + \sum_i \left( \frac{w_i}{2} || A_i S_i q - B_i p_i ||^2_F
+		+ \delta_{C_i} (p_i) \right)
+\end{align}
+
+with respect to $q$ and $p_i$ it sounds like.
+
+\subsection{Local Solve}
+
+A constraint is an elastic potential, with generic form
+
+\begin{align}
+	W(x, y) = d(x, y) + \delta_C(y)
+\end{align}
+
+$W(x, y)$ measures the potential energy going from state $x$ to $y$?
+
+\begin{itemize}
+	\item $x$ is our current state vector
+	\item $y$ is the state we're projecting to. When minimizing the constraint this is
+		where we're going too.
+	\item $d(x, y)$ is some measure of the distance between states $x$ and $y$
+	\item $\delta_C(y)$ acts as an indicator if we're on the constraint manifold $C$ or not,
+		$\delta_C(y) = \infty$ if $y$ doesn't meet the constraint we're trying to satisfy (e.g. a
+		spring at rest length) and $\delta_C(y) = 0$ if it does satisfy it.
+\end{itemize}
+
+The paper \cite{projective_dynamics} uses constraints specified like
+
+\begin{align}
+	W(q, p) = \frac{w}{2} || A q - B p ||^2_F + \delta_C(p)
+\end{align}
+
+$A$ and $B$ depend on the constraint being applied. To satisfy a constraint we project on to the manifold
+with a constrained minimization with respect to $p$
+
+\begin{align}
+	\min_p \frac{w}{2} || A q - B p ||^2_F + \delta_C(p)
+\end{align}
+
+The delta function enforces that $p$ satisfies the constraint we're trying to resolve while the distance measure
+$|| A q - B p ||^2_F$ works to find the closest valid state $p$ to our current state $q$.
+
+The form mentioned in the local solve in the paper (5) in \cite{projective_dynamics} adds an extra
+selection matrix $S_i$ to pick the vertices from $q$ that are involved in the constraint:
+
+\begin{align}
+	\min_{p_i} \frac{w_i}{2} || A_i S_i q - B_i p_i ||^2_F = \delta_{C_i}(p_i)
+\end{align}
+
+\subsubsection{Spring Constraints}
+
+The spring constraint (and they mention this in the paper) works out to be exactly like \cite{fast_mass_spring},
+though I'm a but unsure if for the constraint $w = k$. For a spring with stiffness $k$ and rest length $r$:
+
+\begin{align}
+	W(q, d) = \frac{k}{2} || q - d ||^2 + \delta_S(d)
+\end{align}
+
+Here $q$ is our current spring vector and $d$ is the vector we want to adjust it to, such that $||d|| = r$.
+The constraint function $\delta_S(d)$ would be 0 only if $||d|| = r$, so we end up with exactly the same
+constrained minimization as from \cite{fast_mass_spring}:
+
+\begin{align}
+	\min_{||d|| = r} \frac{k}{2} ||q - d||^2
+\end{align}
+
+I'm not sure here if the $k/2$ should be in here, would $k = w$ for a spring constraint? The minimization is
+then equivalent to projecting the spring vector $q$ on to a sphere with the spring rest length as its radius,
+alternatively:
+
+\begin{align}
+	d = r \frac{q}{||q||}
+\end{align}
+
+\subsubsection{Strain Constraints}
+
+The strain constraint for a triangle is more confusing, its discrete form:
+
+\begin{align}
+	W(q, T) = \frac{w}{2} A || X_f X^{-1}_g - T ||^2_F + \delta_M (T)
+\end{align}
+
+\begin{align*}
+	\delta_M (T) = \begin{cases}
+		0 & T \in M \\
+		\infty & T \not\in M
+	\end{cases}
+\end{align*}
+
+$X_f = [q_j - q_i, q_k - q_i]$ is the triangle edges in the current config, $X_g$ is the triangle edges
+in the rest configuration. So what is the meaning of $X_f X^{-1}_g$ ?
+
+The matrix $T$ that we're minimizing over is $T \in M$ where $M$ is some set of matrices, for isotropic strain
+limiting they mention it is the set of matrices with bounded singular values, $\sigma_{\min} < \sigma < \sigma_{\max}$,
+so now does this mean we must compute the SVD to evaluate $\delta_M (T)$ since membership $M$ is defined by
+the singular values of $T$?
+
+And now we have two degrees of freedom, since $T \in \mathbb{R}^{2 \times 2}$ so do we need to iterate to find
+
+\begin{align}
+	\min_T = \frac{w}{2} A || X_f X^{-1}_g - T ||^2_F + \delta_M (T)
+\end{align}
+
+Or can we just clamp the singular values as Pavol mentions? To find $A$ and $B$ to bring back into the global
+solve would we need to find them such that:
+
+\begin{align}
+	X_f X^{-1}_g &= A_i S_i q \\
+	T &= B_i p_i
+\end{align}
+
+\subsubsection*{Open Questions for Ladislav/Tiantian:}
+\begin{itemize}
+	\item Does the constraint projection really need to be a full constrained optimization solve? It seems
+		like it would be expensive to compute for general constraints then. e.g. for a simple spring constraint
+		you can just find the same spring direction vector with length of the spring's rest length, but what
+		about more complicated constraints?
+
+	\item How does the distance measure for strain constraints $|| X_f X^{-1}_g - T ||^2_F$ relate back to the
+		general form and the matrices used in the global step, $||Aq - Bp||^2_F$ ?
+
+	\item How does the minimization of $T$ work for strain? Can we just clamp the singular values into the
+		range and be done? Would that guarantee that $|| X_f X^{-1}_g - T ||^2_F$ is also minimized?
+
+	\item Why the Frobenius norm? (maybe b/c it's rotation invariant?)
+\end{itemize}
+
+\subsection{Global Solve}
+
+With $s_n = q_n + h v_n + h^2 M^{-1} f_{\text{ext}}$ (the inertia + external forces) we solve:
+
+\begin{align}
+	\left(\frac{M}{h^2} + \sum_i w_i S^T_i A^T_i A_i S_i \right) q =
+		\frac{M}{h^2} s_n + \sum_i w_i S^T_i A^T_i B_i p_i
+\end{align}
+
+Where the $A_i$, $B_i$ are how the constraints effect the global system and $p_i$ incorporates the
+result of the local constraint projections. Note that everything besides $q$ is either constant or
+computed previously in the local step (the $p_i$'s) we're really just solving $A x = b$:
+
+\begin{align*}
+	A &= \left(\frac{M}{h^2} + \sum_i w_i S^T_i A^T_i A_i S_i \right) \\
+	x &= q \\
+	b &= \frac{M}{h^2} s_n + \sum_i w_i S^T_i A^T_i B_i p_i
+\end{align*}
+
+\subsubsection*{Open Questions for Ladislav/Tiantian:}
+\begin{itemize}
+	\item How do the $S_i$, $A_i$, $B_i$ incorporate the discrete constraint formulations from
+		section $5$ in the paper \cite{projective_dynamics}?
+	\item They mention choosing $A_i = B_i$ as differential coordinate matrices, what do they
+		mean here? How does it help the solution?
+\end{itemize}
+
+\bibliography{notes_bib}{}
+\bibliographystyle{plain}
+
+\end{document}
+

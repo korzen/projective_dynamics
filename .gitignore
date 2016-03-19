@@ -2,4 +2,16 @@
 obj/
 pd
 *.so
+# All LaTeX build artifacts should be ignored
+*.aux
+*.dvi
+*.log
+*.pdf
+*.swp
+*.gz
+*.bbl
+*.blg
+*.out
+*.lbl
+*.brf
 
