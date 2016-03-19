@@ -1,0 +1,26 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath,amsfonts}
+
+\begin{document}
+
+\title{Midterm Project Status}
+\author{Pavol Klacansky, Will Usher}
+\maketitle
+
+\section{Current Status}
+
+We've currently got an implementation the Fast Simulation of Mass-Spring Systems paper, which
+from our understanding is somewhat a subset of Projective Dynamics, in that it just handles
+projecting/solving spring constraints. This solver supports a CUDA backend where the local
+and global steps are performed on the GPU however the global step is currently solved with
+a Conjugate Gradient solver since we've integrated with ViennaCL which doesn't provide
+sparse direct solvers.
+
+\section{Remaining Work}
+
+We need to implement the full projective dynamics solver, about which we still have many open
+questions.
+
+\end{document}
+
