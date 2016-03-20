@@ -9,7 +9,15 @@ EIGEN3   = `pkg-config --cflags eigen3`
 ifeq ($(BACKEND), cuda)
 	LIBPD_SOLVER=pd_solver_cuda
 	PD_SO_NAME=libpd_solver_cuda.so
-else ifeq ($(BACKEND), opencl)
+	SOLVER_DEFINES=-DVIENNACL_WITH_CUDA
+else ifeq($(BACKEND) suite_sparse)
+	LIBPD_SOLVER=pd_solver_cuda
+	PD_SO_NAME=libpd_solver_cuda.so
+	SOLVER_DEFINES=-DVIENNACL_WITH_CUDA -DSUITE_SPARSE_CHOLMOD
+	CHOLMOD_INC=-I/home/sci/will/Downloads/SuiteSparse/CHOLMOD/Include/ \
+				-I/home/sci/will/Downloads/SuiteSparse/SuiteSparse_config/
+	CHOLMOD_LIB=-L/home/sci/will/Downloads/SuiteSparse/lib/ -lcholmod -lamd -lcamd
+else ifeq($(BACKEND), opencl)
 	LIBPD_SOLVER=pd_solver_opencl
 	PD_SO_NAME=libpd_solver_opencl.so
 else
@@ -21,14 +29,14 @@ all: build_dir $(PD_SO_NAME) build_jsmn
 	$(CC) $(CFLAGS) -c src/pd_io.c -o obj/pd_io.o
 	$(CC) $(CFLAGS) -c src/pd_linalg.c -o obj/pd_linalg.o
 	$(CC) $(CFLAGS) -c src/main.c -o obj/main.o
-	$(CXX) $(CFLAGS) obj/pd_io.o obj/pd_linalg.o obj/main.o -o pd $(LDFLAGS) -L. -l $(LIBPD_SOLVER)
+	$(CXX) $(CFLAGS) obj/pd_io.o obj/pd_linalg.o obj/main.o -o pd $(LDFLAGS) $(CHOLMOD_LIB) -L. -l $(LIBPD_SOLVER)
 
 libpd_solver_eigen.so: src/backend/pd_eigen.cpp
 	$(CXX) $(CXXFLAGS) $(EIGEN3) --shared -fPIC $^ -o $@
 
 libpd_solver_cuda.so: src/backend/pd_viennacl.cpp
-	nvcc -x cu -arch=sm_20 -std=c++11 -O3 -DVIENNACL_WITH_CUDA \
-		--shared -Xcompiler -fPIC src/backend/pd_viennacl.cpp -o $@ $(CUDA_LIBS)
+	nvcc -x cu -arch=sm_20 -std=c++11 -O3 $(SOLVER_DEFINES) $(CHOLMOD_INC) \
+		--shared -Xcompiler -fPIC src/backend/pd_viennacl.cpp -o $@ $(CHOLMOD_LIB) $(CUDA_LIBS)
 
 libpd_solver_opencl.so: src/backend/pd_viennacl.cpp
 	$(CXX) $(CXXFLAGS) $(EIGEN3) --shared -fPIC -DVIENNACL_WITH_OPENCL $^ -o $@
