@@ -174,6 +174,7 @@ realize()
 {
         glDebugMessageCallback(debug, NULL);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        glEnable(GL_DEPTH_TEST);
         glPointSize(5.0f);
 
         int gl_ver_maj = 0, gl_ver_min = 0;
