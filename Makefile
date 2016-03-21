@@ -35,7 +35,7 @@ libpd_solver_eigen.so: src/backend/pd_eigen.cpp
 	$(CXX) $(CXXFLAGS) $(EIGEN3) --shared -fPIC $^ -o $@
 
 libpd_solver_cuda.so: src/backend/pd_viennacl.cpp
-	nvcc -x cu -arch=sm_20 -std=c++11 -O3 $(SOLVER_DEFINES) $(CHOLMOD_INC) \
+	nvcc -x cu -arch=sm_20 -std=c++11 -g $(SOLVER_DEFINES) $(CHOLMOD_INC) \
 		--shared -Xcompiler -fPIC src/backend/pd_viennacl.cpp -o $@ $(CHOLMOD_LIB) $(CUDA_LIBS)
 
 libpd_solver_opencl.so: src/backend/pd_viennacl.cpp
