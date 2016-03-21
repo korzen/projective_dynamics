@@ -168,6 +168,12 @@ scroll_cb(GLFWwindow *window, double xoffset, double yoffset)
         mat4_mul(&ubo_mapped->view, &zoom, &ubo_mapped->view);
 }
 
+static void
+key_cb(GLFWwindow *window, int key, int scancode, int action, int mods){
+        if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE){
+                glfwSetWindowShouldClose(window, 1);
+        }
+}
 
 static void
 realize()
@@ -377,6 +383,7 @@ main(int argc, char **argv)
         glfwSetMouseButtonCallback(window, mouse_button_cb);
         glfwSetScrollCallback(window, scroll_cb);
         glfwSetWindowSizeCallback(window, resize);
+        glfwSetKeyCallback(window, key_cb);
 
         realize();
 
