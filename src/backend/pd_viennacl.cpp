@@ -2,6 +2,8 @@
 #include <vector>
 #include <algorithm>
 #include <map>
+#include <cusolverSp.h>
+#include <cusolverSp_LOWLEVEL_PREVIEW.h>
 #include <viennacl/vector.hpp>
 #include <viennacl/matrix.hpp>
 #include <viennacl/compressed_matrix.hpp>
@@ -10,6 +12,8 @@
 #include "../pd_solver.h"
 
 #define USE_CUSTOM_KERNELS 1
+#define USE_CUSPARSE 1
+#define USE_CUSPARSE_LOW_LEVEL 1
 
 // ViennaCL doesn't have small host vectors so we need a lightweight
 // vec3f type to do some constraint computation
@@ -56,6 +60,15 @@ struct PdSolver {
         std::vector<PdConstraintSpring> springs;
         viennacl::vector<int> spring_indices;
         viennacl::vector<float> spring_rest_lengths;
+
+#if USE_CUSPARSE 
+        cusolverSpHandle_t cusolver_handle;
+        cusparseMatDescr_t cusolver_mat_descr;
+#if USE_CUSPARSE_LOW_LEVEL
+        csrcholInfo_t cusolver_chol_info;
+        void *cu_workspace;
+#endif
+#endif
 
         float t2;
 
@@ -202,12 +215,75 @@ pd_solver_alloc(float const                         *positions,
 
         // TODO: preconditioner
 
+#if USE_CUSPARSE 
+        std::cout << "Setting up for cuSPARSE solver\n";
+        // Setup cuSparse solver
+        if (cusolverSpCreate(&solver->cusolver_handle) != CUSOLVER_STATUS_SUCCESS){
+                std::cout << "cuda error creating solver\n";
+        }
+        if (cusparseCreateMatDescr(&solver->cusolver_mat_descr) != CUSPARSE_STATUS_SUCCESS){
+                std::cout << "cuda error creating mat description\n";
+        }
+        // TODO: We say general here, but should really say symmetric and then only
+        // keep the upper or lower triangle of A (general is the default)
+        //cusparseSetMatType(solver->cusolver_mat_descr, CUSPARSE_MATRIX_TYPE_SYMMETRIC);
+        cusparseSetMatDiagType(solver->cusolver_mat_descr, CUSPARSE_DIAG_TYPE_NON_UNIT);
+
+#if USE_CUSPARSE_LOW_LEVEL
+        std::cout << "Setting up for low level cuSPARSE solver\n";
+        if (cusolverSpCreateCsrcholInfo(&solver->cusolver_chol_info) != CUSOLVER_STATUS_SUCCESS){
+                std::cout << "Error creating cusolver chol info\n";
+        }
+        
+        // Perform symoblic analysis on the matrix
+        auto status = cusolverSpXcsrcholAnalysis(solver->cusolver_handle, solver->a_mat.size1(),
+                solver->a_mat.nnz(), solver->cusolver_mat_descr,
+                viennacl::cuda_arg<int>(solver->a_mat.handle1()),
+                viennacl::cuda_arg<int>(solver->a_mat.handle2()), solver->cusolver_chol_info);
+        if (status != CUSOLVER_STATUS_SUCCESS){
+                std::cout << "error performing symbolic analysis\n";
+        }
+        size_t cu_internal_data_in_bytes = 0;
+        size_t cu_workspace_in_bytes = 0;
+        // Setup room for the factorization working space
+        status = cusolverSpScsrcholBufferInfo(solver->cusolver_handle, solver->a_mat.size1(),
+                solver->a_mat.nnz(), solver->cusolver_mat_descr,
+                viennacl::cuda_arg<float>(solver->a_mat.handle()),
+                viennacl::cuda_arg<int>(solver->a_mat.handle1()),
+                viennacl::cuda_arg<int>(solver->a_mat.handle2()),
+                solver->cusolver_chol_info, &cu_internal_data_in_bytes, &cu_workspace_in_bytes);
+        if (status != CUSOLVER_STATUS_SUCCESS){
+                std::cout << "error performing cuda buffer info\n";
+        }
+        if (cudaMalloc(&solver->cu_workspace, cu_workspace_in_bytes) != cudaSuccess){
+                std::cout << "error allocating cuda mem\n";
+        }
+        // Next thou shalt factorize
+        status = cusolverSpScsrcholFactor(solver->cusolver_handle, solver->a_mat.size1(),
+                solver->a_mat.nnz(), solver->cusolver_mat_descr,
+                viennacl::cuda_arg<float>(solver->a_mat.handle()),
+                viennacl::cuda_arg<int>(solver->a_mat.handle1()),
+                viennacl::cuda_arg<int>(solver->a_mat.handle2()),
+                solver->cusolver_chol_info, solver->cu_workspace);
+        if (status != CUSOLVER_STATUS_SUCCESS){
+                std::cout << "cusolver error factorizing matrix\n";
+        }
+#endif
+#endif
         return solver;
 }
 
 void
 pd_solver_free(struct PdSolver *solver)
 {
+#if USE_CUSPARSE 
+        cusolverSpDestroy(solver->cusolver_handle);
+        cusparseDestroyMatDescr(solver->cusolver_mat_descr);
+#if USE_CUSPARSE_LOW_LEVEL
+        cusolverSpDestroyCsrcholInfo(solver->cusolver_chol_info);
+        cudaFree(solver->cu_workspace);
+#endif
+#endif
         delete solver;
 }
 
@@ -330,14 +406,36 @@ pd_solver_advance(struct PdSolver *solver){
         /* GLOBAL STEP */
         struct timespec global_start;
         clock_gettime(CLOCK_MONOTONIC, &global_start);
-        // TODO: We should pre-compute this and precondition the system
+#if !USE_CUSPARSE 
+        // Solve the system with ViennaCL's CG solver
+        // TODO: We should precondition the system
         solver->positions = viennacl::linalg::solve(solver->a_mat, b, viennacl::linalg::cg_tag());
-
+#else
+#if !USE_CUSPARSE_LOW_LEVEL
+        // Solve the system with cuSPARSE's higher level API
+        int a_mat_singularity = 0;
+        auto status = cusolverSpScsrlsvchol(solver->cusolver_handle, solver->a_mat.size1(), solver->a_mat.nnz(),
+                solver->cusolver_mat_descr, viennacl::cuda_arg<float>(solver->a_mat.handle()),
+                viennacl::cuda_arg<int>(solver->a_mat.handle1()), viennacl::cuda_arg<int>(solver->a_mat.handle2()),
+                viennacl::cuda_arg(b), 0.0001, 0,
+                viennacl::cuda_arg(solver->positions), &a_mat_singularity);
+#else
+        // Solve the system with cuSPARSE's low level API
+        auto status = cusolverSpScsrcholSolve(solver->cusolver_handle, solver->a_mat.size1(),
+                viennacl::cuda_arg(b), viennacl::cuda_arg(solver->positions), solver->cusolver_chol_info,
+                solver->cu_workspace);
+#endif
+        if (status != CUSOLVER_STATUS_SUCCESS){
+                std::cout << "cuda error solving the global system\n";
+        }
+#endif
         struct timespec global_end;
         clock_gettime(CLOCK_MONOTONIC, &global_end);
 
-        solver->local_cma = (pd_time_diff_ms(&local_start, &local_end) + solver->n_iters*solver->local_cma)/(solver->n_iters + 1);
-        solver->global_cma = (pd_time_diff_ms(&global_start, &global_end) + solver->n_iters*solver->global_cma)/(solver->n_iters + 1);
+        solver->local_cma = (pd_time_diff_ms(&local_start, &local_end) + solver->n_iters*solver->local_cma)
+            /(solver->n_iters + 1);
+        solver->global_cma = (pd_time_diff_ms(&global_start, &global_end) + solver->n_iters*solver->global_cma)
+            /(solver->n_iters + 1);
 
         if (solver->n_iters && !(solver->n_iters % 500)) {
                 printf("Local CMA: %f ms\n", solver->local_cma);
