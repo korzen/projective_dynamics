@@ -1,4 +1,5 @@
 #include <cassert>
+#include <iterator>
 #include <vector>
 #include <algorithm>
 #include <map>
@@ -207,7 +208,7 @@ pd_solver_alloc(float const                         *positions,
         for (const auto &r : build_sparse_mat){
             non_zeros += r.size();
         }
-		std::cout << "matrix has " << non_zeros << " non-zeros\n";
+        std::cout << "matrix has " << non_zeros << " non-zeros\n";
         // Unsure what stype we'd want, lower tri symmetric or upper tri symmetric, just
         // say unsymmetric for now
         cholmod_triplet *a_build = cholmod_l_allocate_triplet(3 * n_positions, 3 * n_positions, non_zeros,
@@ -221,7 +222,7 @@ pd_solver_alloc(float const                         *positions,
                 for (const auto &e : build_sparse_mat[i]){
                     ai[k] = i;
                     aj[k] = e.first;
-                    ax[k] = e.second;
+                    ax[k] = static_cast<double>(e.second);
                     std::cout << "elem[" << k << "] = (" << ai[k] << ", " << aj[k]
                         << ", " << ax[k] << ")\n";
                     ++k;
@@ -230,7 +231,7 @@ pd_solver_alloc(float const                         *positions,
             a_build->nnz = k;
         }
         cholmod_l_print_triplet(a_build, "a_build", &solver->chol_common);
-        solver->ss_a_mat = cholmod_l_triplet_to_sparse(a_build, non_zeros, &solver->chol_common);
+        solver->ss_a_mat = cholmod_l_triplet_to_sparse(a_build, a_build->nnz, &solver->chol_common);
         solver->ss_l_factor = cholmod_l_analyze(solver->ss_a_mat, &solver->chol_common);
         cholmod_l_print_sparse(solver->ss_a_mat, "A", &solver->chol_common);
         cholmod_l_factorize(solver->ss_a_mat, solver->ss_l_factor, &solver->chol_common);
@@ -394,9 +395,32 @@ pd_solver_advance(struct PdSolver *solver){
 
         struct timespec local_end;
         clock_gettime(CLOCK_MONOTONIC, &local_end);
+        std::cout << "----------starting new global solve\n";
+        {
+                std::vector<float> tmp_read_back;
+                tmp_read_back.resize(solver->positions.size(), 0);
+                viennacl::copy(b.begin(), b.end(), tmp_read_back.begin());
+                for (size_t i = 0; i < tmp_read_back.size() / 3; ++i){
+                        std::cout << "vienna_b[" << i << "] = {"
+                            << tmp_read_back[i * 3]
+                            << ", " << tmp_read_back[i * 3 + 1]
+                            << ", " << tmp_read_back[i * 3 + 2]
+                            << "}\n";
+                }
+                tmp_read_back.resize(solver->positions.size(), 0);
+                viennacl::copy(solver->positions.begin(), solver->positions.end(), tmp_read_back.begin());
+                for (size_t i = 0; i < tmp_read_back.size() / 3; ++i){
+                        std::cout << "vienna_pos[" << i << "] = {"
+                            << tmp_read_back[i * 3]
+                            << ", " << tmp_read_back[i * 3 + 1]
+                            << ", " << tmp_read_back[i * 3 + 2]
+                            << "}\n";
+                }
+        }
 
         /* GLOBAL STEP */
         struct timespec global_start;
+#if 1
 #ifndef SUITE_SPARSE_CHOLMOD
         clock_gettime(CLOCK_MONOTONIC, &global_start);
         // TODO: We should pre-compute this and precondition the system
@@ -434,9 +458,12 @@ pd_solver_advance(struct PdSolver *solver){
                     << ", " << x_vals[i * 3 + 2]
                     << " }\n";
             }
-            once = false;
+            //once = false;
         }
+        pd_solver_map_positions(solver);
+        viennacl::copy(solver->mapped_positions.begin(), solver->mapped_positions.end(), solver->positions.begin());
         cholmod_l_free_dense(&ss_b_vec, &solver->chol_common);
+#endif
 #endif
 
         struct timespec global_end;
