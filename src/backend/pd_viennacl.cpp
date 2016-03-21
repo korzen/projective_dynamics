@@ -1,5 +1,4 @@
 #include <cassert>
-#include <iterator>
 #include <vector>
 #include <algorithm>
 #include <map>
@@ -10,11 +9,7 @@
 #include "../pd_time.h"
 #include "../pd_solver.h"
 
-#ifdef SUITE_SPARSE_CHOLMOD
-#include <cholmod.h>
-#endif
-
-#define USE_CUSTOM_KERNELS 0
+#define USE_CUSTOM_KERNELS 1
 
 // ViennaCL doesn't have small host vectors so we need a lightweight
 // vec3f type to do some constraint computation
@@ -55,14 +50,6 @@ struct PdSolver {
         viennacl::compressed_matrix<float> l_mat;
         viennacl::compressed_matrix<float> j_mat;
         viennacl::compressed_matrix<float> a_mat;
-#ifdef SUITE_SPARSE_CHOLMOD
-        // Note: we use doubles throughout here since only doubles are supported
-        // for the gpu solver
-        cholmod_common chol_common;
-        cholmod_sparse *ss_a_mat;
-        cholmod_dense *ss_pos_vec;
-        cholmod_factor *ss_l_factor;
-#endif
 
         std::vector<PdConstraintAttachment> attachments;
         viennacl::vector<float> attachment_pos;
@@ -103,17 +90,6 @@ pd_solver_alloc(float const                         *positions,
         viennacl::copy(positions, positions + 3 * n_positions, solver->positions.begin());
         solver->positions_last = solver->positions;
         solver->mapped_positions.reserve(3 * n_positions);
-#ifdef SUITE_SPARSE_CHOLMOD
-        cholmod_l_start(&solver->chol_common);
-        // TODO How can we check/enforce it's actually running on the gpu
-        solver->chol_common.useGPU = 1;
-        solver->ss_pos_vec = cholmod_l_allocate_dense(3 * n_positions, 1, 3 * n_positions, CHOLMOD_REAL,
-                &solver->chol_common);
-        std::transform(positions, positions + 3 * n_positions, static_cast<double*>(solver->ss_pos_vec->x),
-                [](const float &f){
-                        return static_cast<double>(f);
-                });
-#endif
 
         // Build the mass matrix, the matrix is a 3n x 3n diagonal matrix
         float const total_mass = 1.0f;
@@ -197,47 +173,8 @@ pd_solver_alloc(float const                         *positions,
         for (size_t i = 0; i < build_sparse_mat.size(); ++i){
                 build_sparse_mat[i][i] += point_mass;
         }
-#ifndef SUITE_SPARSE_CHOLMOD
         solver->a_mat = viennacl::compressed_matrix<float>(3 * n_positions, 3 * n_positions);
         viennacl::copy(build_sparse_mat, solver->a_mat);
-#else
-        // Build and pre-factor the suitesparse matrices
-        // We build with a cholmod triplet then copy to a cholmod dense matrix
-        // Find number of non-zeros in this thing
-        size_t non_zeros = 0;
-        for (const auto &r : build_sparse_mat){
-            non_zeros += r.size();
-        }
-        std::cout << "matrix has " << non_zeros << " non-zeros\n";
-        // Unsure what stype we'd want, lower tri symmetric or upper tri symmetric, just
-        // say unsymmetric for now
-        cholmod_triplet *a_build = cholmod_l_allocate_triplet(3 * n_positions, 3 * n_positions, non_zeros,
-                0, CHOLMOD_REAL, &solver->chol_common);
-        {
-            size_t k = 0;
-            SuiteSparse_long *ai = static_cast<SuiteSparse_long*>(a_build->i);
-            SuiteSparse_long *aj = static_cast<SuiteSparse_long*>(a_build->j);
-            double *ax = static_cast<double*>(a_build->x);
-            for (size_t i = 0; i < build_sparse_mat.size(); ++i){
-                for (const auto &e : build_sparse_mat[i]){
-                    ai[k] = i;
-                    aj[k] = e.first;
-                    ax[k] = static_cast<double>(e.second);
-                    std::cout << "elem[" << k << "] = (" << ai[k] << ", " << aj[k]
-                        << ", " << ax[k] << ")\n";
-                    ++k;
-                }
-            }
-            a_build->nnz = k;
-        }
-        cholmod_l_print_triplet(a_build, "a_build", &solver->chol_common);
-        solver->ss_a_mat = cholmod_l_triplet_to_sparse(a_build, a_build->nnz, &solver->chol_common);
-        solver->ss_l_factor = cholmod_l_analyze(solver->ss_a_mat, &solver->chol_common);
-        cholmod_l_print_sparse(solver->ss_a_mat, "A", &solver->chol_common);
-        cholmod_l_factorize(solver->ss_a_mat, solver->ss_l_factor, &solver->chol_common);
-        cholmod_l_print_factor(solver->ss_l_factor, "L factor", &solver->chol_common);
-        cholmod_l_free_triplet(&a_build, &solver->chol_common);
-#endif
 
         // Build the J matrix
         // TODO: I'm not sure what pavol's code means here
@@ -271,12 +208,6 @@ pd_solver_alloc(float const                         *positions,
 void
 pd_solver_free(struct PdSolver *solver)
 {
-#ifdef SUITE_SPARSE_CHOLMOD
-        cholmod_l_free_factor(&solver->ss_l_factor, &solver->chol_common);
-        cholmod_l_free_sparse(&solver->ss_a_mat, &solver->chol_common);
-        cholmod_l_free_dense(&solver->ss_pos_vec, &solver->chol_common);
-        cholmod_l_finish(&solver->chol_common);
-#endif
         delete solver;
 }
 
@@ -395,76 +326,12 @@ pd_solver_advance(struct PdSolver *solver){
 
         struct timespec local_end;
         clock_gettime(CLOCK_MONOTONIC, &local_end);
-        std::cout << "----------starting new global solve\n";
-        {
-                std::vector<float> tmp_read_back;
-                tmp_read_back.resize(solver->positions.size(), 0);
-                viennacl::copy(b.begin(), b.end(), tmp_read_back.begin());
-                for (size_t i = 0; i < tmp_read_back.size() / 3; ++i){
-                        std::cout << "vienna_b[" << i << "] = {"
-                            << tmp_read_back[i * 3]
-                            << ", " << tmp_read_back[i * 3 + 1]
-                            << ", " << tmp_read_back[i * 3 + 2]
-                            << "}\n";
-                }
-                tmp_read_back.resize(solver->positions.size(), 0);
-                viennacl::copy(solver->positions.begin(), solver->positions.end(), tmp_read_back.begin());
-                for (size_t i = 0; i < tmp_read_back.size() / 3; ++i){
-                        std::cout << "vienna_pos[" << i << "] = {"
-                            << tmp_read_back[i * 3]
-                            << ", " << tmp_read_back[i * 3 + 1]
-                            << ", " << tmp_read_back[i * 3 + 2]
-                            << "}\n";
-                }
-        }
 
         /* GLOBAL STEP */
         struct timespec global_start;
-#if 1
-#ifndef SUITE_SPARSE_CHOLMOD
         clock_gettime(CLOCK_MONOTONIC, &global_start);
         // TODO: We should pre-compute this and precondition the system
         solver->positions = viennacl::linalg::solve(solver->a_mat, b, viennacl::linalg::cg_tag());
-#else
-        cholmod_dense *ss_b_vec = cholmod_l_allocate_dense(b.size(), 1, b.size(), CHOLMOD_REAL, &solver->chol_common);
-        std::vector<float> tmp_read_back;
-        tmp_read_back.resize(solver->positions.size(), 0);
-        viennacl::copy(b.begin(), b.end(), tmp_read_back.begin());
-        std::transform(tmp_read_back.begin(), tmp_read_back.end(), static_cast<double*>(ss_b_vec->x),
-                [](const float &f){
-                        return static_cast<double>(f);
-                });
-
-        clock_gettime(CLOCK_MONOTONIC, &global_start);
-        if (solver->ss_pos_vec){
-            cholmod_l_free_dense(&solver->ss_pos_vec, &solver->chol_common);
-        }
-        solver->ss_pos_vec = cholmod_l_solve(CHOLMOD_A, solver->ss_l_factor, ss_b_vec, &solver->chol_common);
-        static bool once = true;
-        if (once){
-            cholmod_l_print_dense(ss_b_vec, "b", &solver->chol_common);
-            cholmod_l_print_dense(solver->ss_pos_vec, "pos", &solver->chol_common);
-            double *x_vals = static_cast<double*>(solver->ss_pos_vec->x);
-            for (size_t i = 0; i < solver->ss_pos_vec->nrow / 3; ++i){
-                std::cout << "pos[" << i << "] = {" << x_vals[i * 3]
-                    << ", " << x_vals[i * 3 + 1]
-                    << ", " << x_vals[i * 3 + 2]
-                    << " }\n";
-            }
-            x_vals = static_cast<double*>(ss_b_vec->x);
-            for (size_t i = 0; i < ss_b_vec->nrow / 3; ++i){
-                std::cout << "b[" << i << "] = {" << x_vals[i * 3]
-                    << ", " << x_vals[i * 3 + 1]
-                    << ", " << x_vals[i * 3 + 2]
-                    << " }\n";
-            }
-            //once = false;
-        }
-        pd_solver_map_positions(solver);
-        viennacl::copy(solver->mapped_positions.begin(), solver->mapped_positions.end(), solver->positions.begin());
-        cholmod_l_free_dense(&ss_b_vec, &solver->chol_common);
-#endif
-#endif
 
         struct timespec global_end;
         clock_gettime(CLOCK_MONOTONIC, &global_end);
@@ -483,17 +350,8 @@ float const *
 pd_solver_map_positions(struct PdSolver const *solver){
         PdSolver *sv = const_cast<PdSolver*>(solver);
         sv->mapped_positions.clear();
-#ifndef SUITE_SPARSE_CHOLMOD
         sv->mapped_positions.resize(solver->positions.size(), 0);
         viennacl::copy(solver->positions.begin(), solver->positions.end(), sv->mapped_positions.begin());
-#else
-        sv->mapped_positions.resize(sv->ss_pos_vec->nrow, 0);
-        std::transform(static_cast<double*>(sv->ss_pos_vec->x),
-                static_cast<double*>(sv->ss_pos_vec->x) + sv->ss_pos_vec->nrow, sv->mapped_positions.begin(),
-                [](const double &d){
-                        return static_cast<float>(d);
-                });
-#endif
         return sv->mapped_positions.data();
 }
 
