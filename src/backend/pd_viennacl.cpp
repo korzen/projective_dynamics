@@ -1,19 +1,25 @@
+#define USE_CUSTOM_KERNELS 1
+#define USE_CUSPARSE 1
+#define USE_CUSPARSE_LOW_LEVEL 1
+
 #include <cassert>
 #include <vector>
 #include <algorithm>
 #include <map>
+
+#if USE_CUSPARSE
 #include <cusolverSp.h>
+#if USE_CUSPARSE_LOW_LEVEL
 #include <cusolverSp_LOWLEVEL_PREVIEW.h>
+#endif
+#endif
+
 #include <viennacl/vector.hpp>
 #include <viennacl/matrix.hpp>
 #include <viennacl/compressed_matrix.hpp>
 #include <viennacl/linalg/cg.hpp>
 #include "../pd_time.h"
 #include "../pd_solver.h"
-
-#define USE_CUSTOM_KERNELS 1
-#define USE_CUSPARSE 1
-#define USE_CUSPARSE_LOW_LEVEL 1
 
 // ViennaCL doesn't have small host vectors so we need a lightweight
 // vec3f type to do some constraint computation
@@ -425,6 +431,8 @@ pd_solver_advance(struct PdSolver *solver){
                 viennacl::cuda_arg(b), viennacl::cuda_arg(solver->positions), solver->cusolver_chol_info,
                 solver->cu_workspace);
 #endif
+        // Wait for cuda solve to be done
+        cudaDeviceSynchronize();
         if (status != CUSOLVER_STATUS_SUCCESS){
                 std::cout << "cuda error solving the global system\n";
         }
