@@ -1,9 +1,9 @@
 CC       ?= gcc
 CXX      ?= g++
-CFLAGS   = -std=c11 -g -I./ -Iext/ -O3 -Wall -Wextra -fopenmp -fstrict-aliasing -march=native `pkg-config --cflags gtk+-3.0 epoxy`
+CFLAGS   = -std=c11 -g -I./ -Iext/ -O3 -Wall -Wextra -fopenmp -fstrict-aliasing -march=native `pkg-config --cflags glfw3 epoxy`
 CXXFLAGS = -std=c++14 -g -O3 -Wall -Wextra -fopenmp -fstrict-aliasing -march=native
 CUDA_LIBS= -L/usr/local/cuda-7.5/lib64/ -lcudart
-LDFLAGS  = -lm `pkg-config --libs gtk+-3.0 epoxy` -l:ext/jsmn/libjsmn.a
+LDFLAGS  = -lm `pkg-config --libs glfw3 epoxy` -l:ext/jsmn/libjsmn.a
 EIGEN3   = `pkg-config --cflags eigen3`
 
 ifeq ($(BACKEND), cuda)

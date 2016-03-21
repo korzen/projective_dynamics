@@ -7,7 +7,7 @@
 #include <time.h>
 
 #include <epoxy/gl.h>
-#include <gtk/gtk.h>
+#include <GLFW/glfw3.h>
 #include <pk/pk_io.h>
 #include <pk/pk_linalg.h>
 
@@ -44,13 +44,14 @@ static char *mesh_filename;
 
 
 static quat_t
-mouse_quat(GtkWidget *widget, GdkEvent *event)
+mouse_quat(GLFWwindow *window)
 {
-        gdouble x_win, y_win;
-        gdk_event_get_coords(event, &x_win, &y_win);
+        double x_win, y_win;
+        glfwGetCursorPos(window, &x_win, &y_win);
 
-        int const width  = gtk_widget_get_allocated_width(widget);
-        int const height = gtk_widget_get_allocated_height(widget);
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+
 
         /* convert to NDC */
         float const x = 2.0f*x_win/width - 1.0f;
@@ -131,86 +132,20 @@ debug(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
 }
 
 
-static GdkGLContext *
-create_context(GtkGLArea *area)
+static void
+mouse_button_cb(GLFWwindow *window, int button, int action, int mods)
 {
-        GdkWindow *window = gtk_widget_get_window(GTK_WIDGET(area));
-
-        GError *error = NULL;
-        GdkGLContext *context = gdk_window_create_gl_context(window, &error);
-        if (error) {
-                fprintf(stderr, "%s\n", error->message);
-                g_error_free(error);
-
-                return NULL;
-        }
-
-        gdk_gl_context_set_debug_enabled(context, TRUE);
-        gdk_gl_context_set_forward_compatible(context, TRUE);
-        gdk_gl_context_set_required_version(context, 4, 5);
-
-
-        return context;
+        cur_quat = mouse_quat(window);
 }
 
 
-static gboolean
-esc_key_press_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
+static void 
+cursor_pos_cb(GLFWwindow *window, double x_pos, double y_pos)
 {
-        guint keyval;
-        gdk_event_get_keyval(event, &keyval);
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != GLFW_PRESS)
+                return;
 
-        if (keyval == GDK_KEY_Escape) {
-                gtk_widget_destroy(widget);
-                gtk_main_quit();
-        }
-
-        return TRUE;
-}
-
-
-static gboolean
-key_press_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
-{
-        guint keyval;
-        gdk_event_get_keyval(event, &keyval);
-
-        switch (keyval) {
-        case GDK_KEY_Left:
-                positions_mapped[0] -= 0.01f;
-                goto redraw;
-        case GDK_KEY_Right:
-                positions_mapped[0] += 0.01;
-                goto redraw;
-        default:
-                return FALSE;
-        }
-
-redraw:
-        gtk_gl_area_queue_render(user_data);
-        return TRUE;
-}
-
-
-static gboolean
-button_press_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
-{
-        cur_quat = mouse_quat(widget, event);
-
-        return TRUE;
-}
-
-
-static gboolean
-motion_notify_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
-{
-        GdkModifierType state;
-        gdk_event_get_state(event, &state);
-
-        if (!(state & GDK_BUTTON1_MASK))
-                return FALSE;
-
-        quat_t const tmp = mouse_quat(widget, event);
+        quat_t const tmp = mouse_quat(window);
         quat_t new;
         quat_mul(&new, &cur_quat, &tmp);
         cur_quat = tmp;
@@ -218,42 +153,25 @@ motion_notify_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
         mat4_t rotation;
         quat_mat4(&rotation, &new);
         mat4_mul(&ubo_mapped->view, &rotation, &ubo_mapped->view);
-
-        gtk_gl_area_queue_render(GTK_GL_AREA(widget));
-
-        return TRUE;
 }
 
 
-static gboolean
-scroll_event(GtkWidget *widget, GdkEvent *event, gpointer user_data)
+static void 
+scroll_cb(GLFWwindow *window, double xoffset, double yoffset)
 {
-        GdkScrollDirection direction;
-        gdk_event_get_scroll_direction(event, &direction);
-
         mat4_t zoom = MAT4;
-        switch (direction) {
-        case GDK_SCROLL_UP:
+        if (yoffset > 0.0)
                 mat4_scale(&zoom, 1.1f, 1.1f, 1.1f);
-                break;
-        case GDK_SCROLL_DOWN:
+        else
                 mat4_scale(&zoom, 0.9f, 0.9f, 0.9f);
-                break;
-        default:
-                return FALSE;
-        }
 
         mat4_mul(&ubo_mapped->view, &zoom, &ubo_mapped->view);
-
-        return TRUE;
 }
 
 
 static void
-realize(GtkWidget *widget, gpointer user_data)
+realize()
 {
-        gtk_gl_area_make_current(GTK_GL_AREA(widget));
-
         glDebugMessageCallback(debug, NULL);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
         glPointSize(5.0f);
@@ -369,8 +287,8 @@ realize(GtkWidget *widget, gpointer user_data)
 }
 
 
-static gboolean
-render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
+static void
+render()
 {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -386,13 +304,11 @@ render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_LINES]);
         glDrawElements(GL_LINES, lines_count, GL_UNSIGNED_INT, NULL);
         glDrawArrays(GL_POINTS, 0, n_positions);
-
-        return TRUE;
 }
 
 
 static void
-resize(GtkGLArea *area, gint width, gint height, gpointer user_data)
+resize(GLFWwindow *window, int width, int height)
 {
         glViewport(0, 0, width, height);
 
@@ -404,10 +320,8 @@ resize(GtkGLArea *area, gint width, gint height, gpointer user_data)
 
 
 static void
-unrealize(GtkWidget *widget, gpointer user_data)
+unrealize()
 {
-        gtk_gl_area_make_current(GTK_GL_AREA(widget));
-
         pd_solver_free(solver);
 
         glDeleteProgram(programs[0]);
@@ -417,14 +331,6 @@ unrealize(GtkWidget *widget, gpointer user_data)
         glDeleteBuffers(2, ebos);
         glDeleteBuffers(1, &vbo);
         glDeleteBuffers(1, &ubo);
-}
-
-
-gboolean
-animate(GtkWidget *widget, GdkFrameClock *frame_clock, gpointer user_data)
-{
-        gtk_gl_area_queue_render(GTK_GL_AREA(widget));
-        return G_SOURCE_CONTINUE;
 }
 
 
@@ -447,38 +353,40 @@ main(int argc, char **argv)
         if (argc > 4)
                 mesh_filename = argv[4];
 
-        gtk_init(&argc, &argv);
+        if (!glfwInit())
+                exit(EXIT_FAILURE);
 
-        GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-        gtk_widget_add_events(window, GDK_KEY_PRESS_MASK);
-        g_signal_connect(window, "delete-event", G_CALLBACK(gtk_main_quit), NULL);
-        g_signal_connect(window, "key-press-event", G_CALLBACK(esc_key_press_event), NULL);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
-        /* set up GL window */
-        GtkWidget *gl_area = gtk_gl_area_new();
-        gtk_gl_area_set_has_depth_buffer(GTK_GL_AREA(gl_area), TRUE);
-        gtk_widget_add_events(gl_area,
-                              GDK_BUTTON_PRESS_MASK |
-                              GDK_BUTTON_RELEASE_MASK |
-                              GDK_POINTER_MOTION_MASK |
-                              GDK_SCROLL_MASK);
+        GLFWwindow *window = glfwCreateWindow(800, 800, "Projective Dynamics",
+                                              NULL, NULL);
+        if (!window) {
+                fputs("Failed to create window\n", stderr);
+                glfwTerminate();
+                exit(EXIT_FAILURE);
+        }
 
-        g_signal_connect(gl_area, "button-press-event", G_CALLBACK(button_press_event), NULL);
-        g_signal_connect(gl_area, "create-context", G_CALLBACK(create_context), NULL);
-        g_signal_connect(gl_area, "motion-notify-event", G_CALLBACK(motion_notify_event), NULL);
-        g_signal_connect(gl_area, "realize", G_CALLBACK(realize), NULL);
-        g_signal_connect(gl_area, "render", G_CALLBACK(render), NULL);
-        g_signal_connect(gl_area, "resize", G_CALLBACK(resize), NULL);
-        g_signal_connect(gl_area, "scroll-event", G_CALLBACK(scroll_event), NULL);
-        g_signal_connect(gl_area, "unrealize", G_CALLBACK(unrealize), NULL);
+        glfwMakeContextCurrent(window);
 
-        gtk_container_add(GTK_CONTAINER(window), gl_area);
-        gtk_widget_add_tick_callback(gl_area, animate, NULL, NULL);
+        glfwSetCursorPosCallback(window, cursor_pos_cb);
+        glfwSetMouseButtonCallback(window, mouse_button_cb);
+        glfwSetScrollCallback(window, scroll_cb);
+        glfwSetWindowSizeCallback(window, resize);
 
-        g_signal_connect(window, "key-press-event",
-                         G_CALLBACK(key_press_event), gl_area);
+        realize();
 
-        gtk_widget_show_all(window);
+        while (!glfwWindowShouldClose(window)) {
+                render();
+                glfwSwapBuffers(window);
+                glfwPollEvents();
+        }
 
-        gtk_main();
+        unrealize();
+
+        glfwDestroyWindow(window);
+        glfwTerminate();
 }
