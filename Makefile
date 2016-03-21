@@ -10,14 +10,14 @@ ifeq ($(BACKEND), cuda)
 	LIBPD_SOLVER=pd_solver_cuda
 	PD_SO_NAME=libpd_solver_cuda.so
 	SOLVER_DEFINES=-DVIENNACL_WITH_CUDA
-else ifeq($(BACKEND) suite_sparse)
+else ifeq ($(BACKEND), suite_sparse)
 	LIBPD_SOLVER=pd_solver_cuda
 	PD_SO_NAME=libpd_solver_cuda.so
 	SOLVER_DEFINES=-DVIENNACL_WITH_CUDA -DSUITE_SPARSE_CHOLMOD
 	CHOLMOD_INC=-I/home/sci/will/Downloads/SuiteSparse/CHOLMOD/Include/ \
 				-I/home/sci/will/Downloads/SuiteSparse/SuiteSparse_config/
 	CHOLMOD_LIB=-L/home/sci/will/Downloads/SuiteSparse/lib/ -lcholmod -lamd -lcamd
-else ifeq($(BACKEND), opencl)
+else ifeq ($(BACKEND), opencl)
 	LIBPD_SOLVER=pd_solver_opencl
 	PD_SO_NAME=libpd_solver_opencl.so
 else
