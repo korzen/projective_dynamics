@@ -71,6 +71,7 @@ struct PdSolver {
 #if USE_CUSPARSE_LOW_LEVEL
         csrcholInfo_t cusolver_chol_info;
         void *cu_workspace;
+		size_t a_mat_size1;
 #endif
 #endif
 
@@ -272,6 +273,9 @@ pd_solver_alloc(float const                         *positions,
         if (status != CUSOLVER_STATUS_SUCCESS){
                 std::cout << "cusolver error factorizing matrix\n";
         }
+		solver->a_mat_size1 = solver->a_mat.size1();
+		// Dump the old matrix
+		solver->a_mat.resize(1, 1, false);
 #endif
 #endif
         return solver;
@@ -425,7 +429,7 @@ pd_solver_advance(struct PdSolver *solver){
                 viennacl::cuda_arg(solver->positions), &a_mat_singularity);
 #else
         // Solve the system with cuSPARSE's low level API
-        auto status = cusolverSpScsrcholSolve(solver->cusolver_handle, solver->a_mat.size1(),
+        auto status = cusolverSpScsrcholSolve(solver->cusolver_handle, solver->a_mat_size1,
                 viennacl::cuda_arg(b), viennacl::cuda_arg(solver->positions), solver->cusolver_chol_info,
                 solver->cu_workspace);
 #endif
