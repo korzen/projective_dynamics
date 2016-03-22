@@ -1,6 +1,8 @@
 \documentclass[11pt]{article}
 
-\usepackage{amsmath,amsfonts}
+\usepackage{amsmath, amsfonts, color}
+
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{TODO: #1}}}
 
 \begin{document}
 
@@ -8,19 +10,78 @@
 \author{Pavol Klacansky, Will Usher}
 \maketitle
 
+\section{Project Overview}
+
+Our project is to implement Projective Dynamics on the GPU, and explore how it performs
+on this different architecture. We'd also like to explore methods for improving its performance
+on the GPU, as it's likely that some of the solvers and methods used on the CPU will not map
+well to the GPU execution model.
+
 \section{Current Status}
 
-We've currently got an implementation the Fast Simulation of Mass-Spring Systems paper, which
+We've implemented the Fast Simulation of Mass-Spring Systems paper on the GPU, which
 from our understanding is somewhat a subset of Projective Dynamics, in that it just handles
-projecting/solving spring constraints. This solver supports a CUDA backend where the local
-and global steps are performed on the GPU however the global step is currently solved with
-a Conjugate Gradient solver since we've integrated with ViennaCL which doesn't provide
-sparse direct solvers.
+projecting/solving spring constraints. The system can choose from a few solver backends found under
+src/backend. We support a reference CPU backend with Eigen (pd\_eigen.cpp) and a few GPU
+linear solvers through ViennaCL and cuSPARSE, (pd\_viennacl.cpp) the GPU global solver is selected
+with some defines.
+
+\TODO{maybe also some discussion of the overall system we've implemented?}
+
+The CUDA backend performs both the local and global steps on the GPU if \texttt{USE\_CUSTOM\_KERNELS} is
+defined, allowing us to avoid data transfer penalties that would be incurred when performing the
+local step on the CPU then copying over to a GPU linear solver. To compare performance of different solvers
+on for the global solve we experimented with ViennaCL's conjugate gradient solver and the cuSPARSE high
+and low level APIs.
+
+cuSPARSE provides two methods for solving systems, both allow for avoiding data transfer overhead
+by passing device-side pointers however the high level API does not allow for pre-factoring the system,
+trading performance for a simpler API. In some tests on varying sizes of a quad mesh of springs we
+found that in the case of sparse direct solvers Eigen (using the SimplicialLLT solver) out performed
+both cuSPARSE APIs, while ViennaCL's conjugate gradient solver provided the best performance overall
+(except for very small systems).
+
+As we try to scale to larger systems like some tet meshes (\TODO{which crashed viennacl? ant?}) we're
+also encountering issues with running out of GPU memory. The machine we're testing on has a single
+Nvidia GTX 980 with only 4GB of RAM. This may require looking at ways to reduce our memory usage
+as well. \TODO{Does that error from ViennaCL on the ant actually mean we're out of VRAM?}
+
+NOTE: With the cuSPARSE low level we run out of VRAM on my 980 at 512x512, should try some runs between
+$256^2$ and $512^2$ and see how it runs.
+
+\section{Work Distribution}
+
+\begin{itemize}
+	\item Pavol: \TODO{Pavol put what you did}
+	\item Will: \TODO{Will put what you did}
+\end{itemize}
 
 \section{Remaining Work}
 
 We need to implement the full projective dynamics solver, about which we still have many open
-questions.
+questions:
+
+\begin{itemize}
+	\item Does the constraint projection really need to be a full constrained optimization solve? It seems
+		like it would be expensive to compute for general constraints then. e.g. for a simple spring constraint
+		you can just find the same spring direction vector with length of the spring's rest length, but what
+		about more complicated constraints?
+
+	\item How does the distance measure for strain constraints $|| X_f X^{-1}_g - T ||^2_F$ relate back to the
+		general form and the matrices used in the global step, $||Aq - Bp||^2_F$ ?
+
+	\item How does the minimization of $T$ work for strain? Can we just clamp the singular values into the
+		range and be done? Would that guarantee that $|| X_f X^{-1}_g - T ||^2_F$ is also minimized?
+
+	\item Why the Frobenius norm? (maybe b/c it's rotation invariant?)
+	\item How do the $S_i$, $A_i$, $B_i$ incorporate the discrete constraint formulations from
+		section $5$ in the paper?
+	\item Why choose $A_i = B_i$ as differential coordinate matrices, what do they
+		mean here? How does it help the solution?
+\end{itemize}
+
+It would also be worth examining where our memory usage is going and see if there
+are ways to reduce it so we can solve large systems.
 
 \end{document}
 
