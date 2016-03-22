@@ -1,0 +1,37 @@
+[
+        {
+                "n_x": 16,
+                "n_y": 16,
+                "local_cma": 0.137,
+                "global_cma": 2.596,
+                "unit": "ms"
+        },
+        {
+                "n_x": 32,
+                "n_y": 32,
+                "local_cma": 0.131,
+                "global_cma": 12.094,
+                "unit": "ms"
+        },
+        {
+                "n_x": 64,
+                "n_y": 64,
+                "local_cma": 0.137,
+                "global_cma": 68.172,
+                "unit": "ms"
+        },
+        {
+                "n_x": 128,
+                "n_y": 128,
+                "local_cma": 0.285,
+                "global_cma": 388.141,
+                "unit": "ms"
+        },
+        {
+                "n_x": 256,
+                "n_y": 256,
+                "local_cma": 0.891,
+                "global_cma": 3004.447,
+                "unit": "ms"
+        }
+]
