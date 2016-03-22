@@ -10,6 +10,14 @@ ifeq ($(BACKEND), cuda)
 	LIBPD_SOLVER=pd_solver_cuda
 	PD_SO_NAME=libpd_solver_cuda.so
 	SOLVER_DEFINES=-DVIENNACL_WITH_CUDA
+else ifeq ($(BACKEND), cusparse_high)
+	LIBPD_SOLVER=pd_solver_cuda
+	PD_SO_NAME=libpd_solver_cuda.so
+	SOLVER_DEFINES=-DVIENNACL_WITH_CUDA -DUSE_CUSPARSE=1
+else ifeq ($(BACKEND), cusparse_low)
+	LIBPD_SOLVER=pd_solver_cuda
+	PD_SO_NAME=libpd_solver_cuda.so
+	SOLVER_DEFINES=-DVIENNACL_WITH_CUDA -DUSE_CUSPARSE=1 -DUSE_CUSPARSE_LOW_LEVEL=1
 else ifeq ($(BACKEND), opencl)
 	LIBPD_SOLVER=pd_solver_opencl
 	PD_SO_NAME=libpd_solver_opencl.so
@@ -28,7 +36,7 @@ libpd_solver_eigen.so: src/backend/pd_eigen.cpp
 	$(CXX) $(CXXFLAGS) $(EIGEN3) --shared -fPIC $^ -o $@
 
 libpd_solver_cuda.so: src/backend/pd_viennacl.cpp
-	nvcc -x cu -arch=sm_35 -std=c++11 -O3 $(SOLVER_DEFINES) \
+	nvcc -x cu -arch=compute_52 -code=sm_52 -std=c++11 -O3 $(SOLVER_DEFINES) \
 		--shared -Xcompiler -fPIC src/backend/pd_viennacl.cpp -o $@
 
 libpd_solver_opencl.so: src/backend/pd_viennacl.cpp

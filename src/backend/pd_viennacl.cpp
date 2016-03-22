@@ -1,6 +1,4 @@
 #define USE_CUSTOM_KERNELS 1
-#define USE_CUSPARSE 1
-#define USE_CUSPARSE_LOW_LEVEL 1
 
 #include <cassert>
 #include <vector>
