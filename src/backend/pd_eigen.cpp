@@ -175,7 +175,6 @@ pd_solver_free(struct PdSolver *solver)
 void
 pd_solver_set_ext_force(struct PdSolver *solver, float const *force)
 {
-        printf("%f %f %f\n", force[0], force[1], force[2]);
         memcpy(solver->ext_force, force, 3*sizeof *force);
 }
 
