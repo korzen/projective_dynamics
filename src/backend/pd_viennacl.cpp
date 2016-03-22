@@ -1,4 +1,4 @@
-#define USE_CUSTOM_KERNELS 1
+#define USE_CUSTOM_KERNELS 0
 
 #include <cassert>
 #include <vector>
@@ -23,7 +23,8 @@
 // vec3f type to do some constraint computation
 struct vec3f {
         float x, y, z;
-        
+       
+        vec3f(){ vec3f(0.0f, 0.0f, 0.0f); }
         vec3f(float x, float y, float z) : x(x), y(y), z(z){}
         vec3f(float x[3]) : x(x[0]), y(x[1]), z(x[2]){}
         float length() const {
@@ -75,6 +76,7 @@ struct PdSolver {
 #endif
 
         float t2;
+        vec3f ext_force;
 
         // Note: every dereference of a viennacl vector element/iterator
         // triggers a transfer back from the GPU. When mapping we do a single
@@ -102,6 +104,7 @@ pd_solver_alloc(float const                         *positions,
         solver->global_cma = 0.0;
         solver->n_iters = 0;
         solver->t2 = timestep * timestep;
+        solver->ext_force = vec3f(0.0f, 0.0f, -9.83f);
 
         solver->positions = viennacl::vector<float>(3 * n_positions);
         viennacl::copy(positions, positions + 3 * n_positions, solver->positions.begin());
@@ -341,6 +344,14 @@ __global__ void set_spring_constraints(const float * __restrict__ positions, con
 
 #endif
 
+
+void
+pd_solver_set_ext_force(struct PdSolver *solver, const float *force)
+{
+        solver->ext_force = vec3f(force[0], force[1], force[2]);
+}
+
+
 void
 pd_solver_advance(struct PdSolver *solver){
         /* LOCAL STEP (we account everything except the global solve */
@@ -353,9 +364,10 @@ pd_solver_advance(struct PdSolver *solver){
         viennacl::vector<float> ext_force(solver->positions.size());
 #if !defined(VIENNACL_WITH_CUDA) || !USE_CUSTOM_KERNELS
         // TODO: For OpenCL we need to also write these init kernels
-        float const gravity = -9.81f;
         for (size_t i = 0; i < solver->positions.size() / 3; ++i){
-                vec_build[3 * i + 2] = gravity;
+                vec_build[3 * i] = solver->ext_force.x;
+                vec_build[3 * i + 1] = solver->ext_force.y;
+                vec_build[3 * i + 2] = solver->ext_force.z;
         }
         viennacl::copy(vec_build.begin(), vec_build.end(), ext_force.begin());
 #else
