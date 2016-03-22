@@ -59,9 +59,29 @@ $256^2$ and $512^2$ and see how it runs.
 \section{Remaining Work}
 
 We need to implement the full projective dynamics solver, about which we still have many open
-questions.
+questions:
 
-\TODO{list of remaining open questions, work to be done}
+\begin{itemize}
+	\item Does the constraint projection really need to be a full constrained optimization solve? It seems
+		like it would be expensive to compute for general constraints then. e.g. for a simple spring constraint
+		you can just find the same spring direction vector with length of the spring's rest length, but what
+		about more complicated constraints?
+
+	\item How does the distance measure for strain constraints $|| X_f X^{-1}_g - T ||^2_F$ relate back to the
+		general form and the matrices used in the global step, $||Aq - Bp||^2_F$ ?
+
+	\item How does the minimization of $T$ work for strain? Can we just clamp the singular values into the
+		range and be done? Would that guarantee that $|| X_f X^{-1}_g - T ||^2_F$ is also minimized?
+
+	\item Why the Frobenius norm? (maybe b/c it's rotation invariant?)
+	\item How do the $S_i$, $A_i$, $B_i$ incorporate the discrete constraint formulations from
+		section $5$ in the paper?
+	\item Why choose $A_i = B_i$ as differential coordinate matrices, what do they
+		mean here? How does it help the solution?
+\end{itemize}
+
+It would also be worth examining where our memory usage is going and see if there
+are ways to reduce it so we can solve large systems.
 
 \end{document}
 
