@@ -59,6 +59,9 @@ vec2_t
 vec2_mul(float const s, vec2_t const v);
 
 void
+mat4_inv(mat4_t *restrict res, mat4_t const *restrict m);
+
+void
 mat4_mul(mat4_t *res, mat4_t const *m0, mat4_t const *m1);
 
 void
@@ -73,6 +76,7 @@ quat_mat4(mat4_t *restrict m, quat_t const *restrict q);
 
 #ifdef PK_LINALG_IMPLEMENTATION
 
+#include <assert.h>
 #include <tgmath.h>
 
 
@@ -176,6 +180,132 @@ void
 vec4_normalize(vec4_t *v)
 {
         vec4_mul(v, 1.0f/vec4_length(v), v);
+}
+
+
+/* lifted from MESA */
+void
+mat4_inv(mat4_t *restrict res, mat4_t const *restrict m)
+{
+    res->v[0] = m->v[5]  * m->v[10] * m->v[15] -
+             m->v[5]  * m->v[11] * m->v[14] -
+             m->v[9]  * m->v[6]  * m->v[15] +
+             m->v[9]  * m->v[7]  * m->v[14] +
+             m->v[13] * m->v[6]  * m->v[11] -
+             m->v[13] * m->v[7]  * m->v[10];
+
+    res->v[4] = -m->v[4]  * m->v[10] * m->v[15] +
+              m->v[4]  * m->v[11] * m->v[14] +
+              m->v[8]  * m->v[6]  * m->v[15] -
+              m->v[8]  * m->v[7]  * m->v[14] -
+              m->v[12] * m->v[6]  * m->v[11] +
+              m->v[12] * m->v[7]  * m->v[10];
+
+    res->v[8] = m->v[4]  * m->v[9] * m->v[15] -
+             m->v[4]  * m->v[11] * m->v[13] -
+             m->v[8]  * m->v[5] * m->v[15] +
+             m->v[8]  * m->v[7] * m->v[13] +
+             m->v[12] * m->v[5] * m->v[11] -
+             m->v[12] * m->v[7] * m->v[9];
+
+    res->v[12] = -m->v[4]  * m->v[9] * m->v[14] +
+               m->v[4]  * m->v[10] * m->v[13] +
+               m->v[8]  * m->v[5] * m->v[14] -
+               m->v[8]  * m->v[6] * m->v[13] -
+               m->v[12] * m->v[5] * m->v[10] +
+               m->v[12] * m->v[6] * m->v[9];
+
+    res->v[1] = -m->v[1]  * m->v[10] * m->v[15] +
+              m->v[1]  * m->v[11] * m->v[14] +
+              m->v[9]  * m->v[2] * m->v[15] -
+              m->v[9]  * m->v[3] * m->v[14] -
+              m->v[13] * m->v[2] * m->v[11] +
+              m->v[13] * m->v[3] * m->v[10];
+
+    res->v[5] = m->v[0]  * m->v[10] * m->v[15] -
+             m->v[0]  * m->v[11] * m->v[14] -
+             m->v[8]  * m->v[2] * m->v[15] +
+             m->v[8]  * m->v[3] * m->v[14] +
+             m->v[12] * m->v[2] * m->v[11] -
+             m->v[12] * m->v[3] * m->v[10];
+
+    res->v[9] = -m->v[0]  * m->v[9] * m->v[15] +
+              m->v[0]  * m->v[11] * m->v[13] +
+              m->v[8]  * m->v[1] * m->v[15] -
+              m->v[8]  * m->v[3] * m->v[13] -
+              m->v[12] * m->v[1] * m->v[11] +
+              m->v[12] * m->v[3] * m->v[9];
+
+    res->v[13] = m->v[0]  * m->v[9] * m->v[14] -
+              m->v[0]  * m->v[10] * m->v[13] -
+              m->v[8]  * m->v[1] * m->v[14] +
+              m->v[8]  * m->v[2] * m->v[13] +
+              m->v[12] * m->v[1] * m->v[10] -
+              m->v[12] * m->v[2] * m->v[9];
+
+    res->v[2] = m->v[1]  * m->v[6] * m->v[15] -
+             m->v[1]  * m->v[7] * m->v[14] -
+             m->v[5]  * m->v[2] * m->v[15] +
+             m->v[5]  * m->v[3] * m->v[14] +
+             m->v[13] * m->v[2] * m->v[7] -
+             m->v[13] * m->v[3] * m->v[6];
+
+    res->v[6] = -m->v[0]  * m->v[6] * m->v[15] +
+              m->v[0]  * m->v[7] * m->v[14] +
+              m->v[4]  * m->v[2] * m->v[15] -
+              m->v[4]  * m->v[3] * m->v[14] -
+              m->v[12] * m->v[2] * m->v[7] +
+              m->v[12] * m->v[3] * m->v[6];
+
+    res->v[10] = m->v[0]  * m->v[5] * m->v[15] -
+              m->v[0]  * m->v[7] * m->v[13] -
+              m->v[4]  * m->v[1] * m->v[15] +
+              m->v[4]  * m->v[3] * m->v[13] +
+              m->v[12] * m->v[1] * m->v[7] -
+              m->v[12] * m->v[3] * m->v[5];
+
+    res->v[14] = -m->v[0]  * m->v[5] * m->v[14] +
+               m->v[0]  * m->v[6] * m->v[13] +
+               m->v[4]  * m->v[1] * m->v[14] -
+               m->v[4]  * m->v[2] * m->v[13] -
+               m->v[12] * m->v[1] * m->v[6] +
+               m->v[12] * m->v[2] * m->v[5];
+
+    res->v[3] = -m->v[1] * m->v[6] * m->v[11] +
+              m->v[1] * m->v[7] * m->v[10] +
+              m->v[5] * m->v[2] * m->v[11] -
+              m->v[5] * m->v[3] * m->v[10] -
+              m->v[9] * m->v[2] * m->v[7] +
+              m->v[9] * m->v[3] * m->v[6];
+
+    res->v[7] = m->v[0] * m->v[6] * m->v[11] -
+             m->v[0] * m->v[7] * m->v[10] -
+             m->v[4] * m->v[2] * m->v[11] +
+             m->v[4] * m->v[3] * m->v[10] +
+             m->v[8] * m->v[2] * m->v[7] -
+             m->v[8] * m->v[3] * m->v[6];
+
+    res->v[11] = -m->v[0] * m->v[5] * m->v[11] +
+               m->v[0] * m->v[7] * m->v[9] +
+               m->v[4] * m->v[1] * m->v[11] -
+               m->v[4] * m->v[3] * m->v[9] -
+               m->v[8] * m->v[1] * m->v[7] +
+               m->v[8] * m->v[3] * m->v[5];
+
+    res->v[15] = m->v[0] * m->v[5] * m->v[10] -
+              m->v[0] * m->v[6] * m->v[9] -
+              m->v[4] * m->v[1] * m->v[10] +
+              m->v[4] * m->v[2] * m->v[9] +
+              m->v[8] * m->v[1] * m->v[6] -
+              m->v[8] * m->v[2] * m->v[5];
+
+    float const det = m->v[0]*res->v[0] + m->v[1]*res->v[4] + m->v[2]*res->v[8] + m->v[3]*res->v[12];
+
+    assert(det != 0.0f);
+    float const det_inv = 1.0f/det;
+
+    for (int i = 0; i < 16; i++)
+        res->v[i] = res->v[i]*det_inv;
 }
 
 

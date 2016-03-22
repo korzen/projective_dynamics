@@ -26,6 +26,7 @@ struct PdSolver {
         uint32_t n_springs;
 
         float t2;
+        float ext_force[3];
 
         /* cumulative moving average for local and global time */
         double   local_cma;
@@ -59,6 +60,10 @@ pd_solver_alloc(float const                         *positions,
 
         solver->positions = Eigen::VectorXf::Map(positions, 3*n_positions);
         solver->positions_last = solver->positions;
+
+        solver->ext_force[0] = 0.0f;
+        solver->ext_force[1] = 0.0f;
+        solver->ext_force[2] = -9.8f;
 
 
         /* initialize mass matrix */
@@ -168,18 +173,25 @@ pd_solver_free(struct PdSolver *solver)
 
 
 void
+pd_solver_set_ext_force(struct PdSolver *solver, float const *force)
+{
+        printf("%f %f %f\n", force[0], force[1], force[2]);
+        memcpy(solver->ext_force, force, 3*sizeof *force);
+}
+
+
+void
 pd_solver_advance(struct PdSolver *solver)
 {
         /* LOCAL STEP (we account everything except the global solve */
         struct timespec local_start;
         clock_gettime(CLOCK_MONOTONIC, &local_start);
 
-        float const gravity = -9.81f;
-
-        /* compute external force */
+        /* set external force */
         Eigen::VectorXf ext_accel = Eigen::VectorXf::Zero(solver->positions.size());
         for (uint32_t i = 0; i < solver->positions.size()/3; ++i)
-                ext_accel[3*i + 2] = gravity;
+                for (int j = 0; j < 3; ++j)
+                        ext_accel[3*i + j] = solver->ext_force[j];
         Eigen::VectorXf const ext_force = solver->mass_mat*ext_accel;
 
 

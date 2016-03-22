@@ -41,6 +41,7 @@ static float timestep = 1.0f/(60.0f*10);
 static uint32_t resolution_x = 16;
 static uint32_t resolution_y = 16;
 static char *mesh_filename;
+static mat4_t rotation_obj;
 
 
 static quat_t
@@ -152,7 +153,19 @@ cursor_pos_cb(GLFWwindow *window, double x_pos, double y_pos)
 
         mat4_t rotation;
         quat_mat4(&rotation, &new);
+        mat4_mul(&rotation_obj, &rotation, &rotation_obj);
         mat4_mul(&ubo_mapped->view, &rotation, &ubo_mapped->view);
+
+        /* invert rotation matrix to find new gravity force */
+        mat4_t rotation_obj_inv;
+        mat4_inv(&rotation_obj_inv, &rotation_obj);
+        vec4_t gravity = VEC4(0.0f, -9.8f, 0.0f, 0.0f);
+        vec4_t force;
+        mat4_vec4_mul(&force, &rotation_obj_inv, &gravity);
+
+        /* swap y and z axis */
+        force = VEC4(force.x, force.z, force.y, force.w);
+        pd_solver_set_ext_force(solver, force.v);
 }
 
 
@@ -359,6 +372,8 @@ main(int argc, char **argv)
         /* TODO: res does not make sense to specify above */
         if (argc > 4)
                 mesh_filename = argv[4];
+
+        rotation_obj = MAT4;
 
         if (!glfwInit())
                 exit(EXIT_FAILURE);
