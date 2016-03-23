@@ -26,7 +26,8 @@ src/backend. We support a reference CPU backend with Eigen (pd\_eigen.cpp) and a
 linear solvers through ViennaCL and cuSPARSE, (pd\_viennacl.cpp) the GPU global solver is selected
 with some defines.
 
-\TODO{maybe also some discussion of the overall system we've implemented?}
+We also created utilities for converting tet meshes to our .json format,
+exporting cloth from Blender, and plotting data.
 
 The CUDA backend performs both the local and global steps on the GPU if \texttt{USE\_CUSTOM\_KERNELS} is
 defined, allowing us to avoid data transfer penalties that would be incurred when performing the
@@ -41,19 +42,19 @@ found that in the case of sparse direct solvers Eigen (using the SimplicialLLT s
 both cuSPARSE APIs, while ViennaCL's conjugate gradient solver provided the best performance overall
 (except for very small systems).
 
-As we try to scale to larger systems like some tet meshes (\TODO{which crashed viennacl? ant?}) we're
+As we try to scale to larger systems like some tet meshes we're
 also encountering issues with running out of GPU memory. The machine we're testing on has a single
 Nvidia GTX 980 with only 4GB of RAM. This may require looking at ways to reduce our memory usage
-as well. \TODO{Does that error from ViennaCL on the ant actually mean we're out of VRAM?}
+as well.
 
-NOTE: With the cuSPARSE low level we run out of VRAM on my 980 at 512x512, should try some runs between
-$256^2$ and $512^2$ and see how it runs.
+However, on the tet meshes the Eigen direct solver outperformed ViennaCL CG by
+about factor of four.
 
 \section{Work Distribution}
 
 \begin{itemize}
-	\item Pavol: \TODO{Pavol put what you did}
-	\item Will: \TODO{Will put what you did}
+	\item Pavol: initial Eigen implementation and utilities
+	\item Will: ViennaCL and Cuda backends
 \end{itemize}
 
 \section{Remaining Work}
@@ -78,10 +79,17 @@ questions:
 		section $5$ in the paper?
 	\item Why choose $A_i = B_i$ as differential coordinate matrices, what do they
 		mean here? How does it help the solution?
+        \item Why Eigen scales better with respect to the number of constraints?
+              (aparent on tetrahedral meshes where the ratio of positions to
+               springs is much lower)
 \end{itemize}
 
-It would also be worth examining where our memory usage is going and see if there
-are ways to reduce it so we can solve large systems.
+We observed that ViennaCL sparse matrices use order of magnitude less memory
+than cuSPARSE (both use Cuda as backend). For example the ant tet mesh used
+$\approx$100 MB with ViennaCL compared to $\approx$6000 MB with cuSPARSE.
+As mentioned in previous section, the ViennaCL scales poorly for volumetric
+meshes and thus we will explore the problem and possibly try hierarchical
+decomposition.
 
 \end{document}
 
