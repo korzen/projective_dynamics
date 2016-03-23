@@ -266,3 +266,9 @@ pd_solver_local_cma(struct PdSolver const *solver)
 {
         return solver->local_cma;
 }
+
+char const *
+pd_solver_name(struct PdSolver const *solver)
+{
+        return "Eigen";
+}

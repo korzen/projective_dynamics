@@ -29,7 +29,7 @@
 // vec3f type to do some constraint computation
 struct vec3f {
         float x, y, z;
-       
+
         vec3f(){ vec3f(0.0f, 0.0f, 0.0f); }
         CU_DEVICE_EXPORT vec3f(float x, float y, float z) : x(x), y(y), z(z){}
         vec3f(float x[3]) : x(x[0]), y(x[1]), z(x[2]){}
@@ -72,7 +72,7 @@ struct PdSolver {
         viennacl::vector<int> spring_indices;
         viennacl::vector<float> spring_rest_lengths;
 
-#if USE_CUSPARSE 
+#if USE_CUSPARSE
         cusolverSpHandle_t cusolver_handle;
         cusparseMatDescr_t cusolver_mat_descr;
 #if USE_CUSPARSE_LOW_LEVEL
@@ -232,7 +232,7 @@ pd_solver_alloc(float const                         *positions,
 
         // TODO: preconditioner
 
-#if USE_CUSPARSE 
+#if USE_CUSPARSE
         std::cout << "Setting up for cuSPARSE solver\n";
         // Setup cuSparse solver
         if (cusolverSpCreate(&solver->cusolver_handle) != CUSOLVER_STATUS_SUCCESS){
@@ -251,7 +251,6 @@ pd_solver_alloc(float const                         *positions,
         if (cusolverSpCreateCsrcholInfo(&solver->cusolver_chol_info) != CUSOLVER_STATUS_SUCCESS){
                 std::cout << "Error creating cusolver chol info\n";
         }
-        
         // Perform symoblic analysis on the matrix
         auto status = cusolverSpXcsrcholAnalysis(solver->cusolver_handle, solver->a_mat.size1(),
                 solver->a_mat.nnz(), solver->cusolver_mat_descr,
@@ -296,7 +295,7 @@ pd_solver_alloc(float const                         *positions,
 void
 pd_solver_free(struct PdSolver *solver)
 {
-#if USE_CUSPARSE 
+#if USE_CUSPARSE
         cusolverSpDestroy(solver->cusolver_handle);
         cusparseDestroyMatDescr(solver->cusolver_mat_descr);
 #if USE_CUSPARSE_LOW_LEVEL
@@ -434,7 +433,7 @@ pd_solver_advance(struct PdSolver *solver){
         /* GLOBAL STEP */
         struct timespec global_start;
         clock_gettime(CLOCK_MONOTONIC, &global_start);
-#if !USE_CUSPARSE 
+#if !USE_CUSPARSE
         // Solve the system with ViennaCL's CG solver
         // TODO: We should precondition the system
         solver->positions = viennacl::linalg::solve(solver->a_mat, b, viennacl::linalg::cg_tag());
@@ -491,4 +490,28 @@ pd_solver_global_cma(const struct PdSolver *solver){
 double
 pd_solver_local_cma(const struct PdSolver *solver){
         return solver->local_cma;
+}
+
+char const *
+pd_solver_name(struct PdSolver const *solver)
+{
+#if !USE_CUSPARSE
+
+#ifdef VIENNACL_WITH_CUDA
+        return "ViennaCL with CUDA";
+#elif defined(VIENNACL_WITH_OPENCL)
+        return "ViennaCL with OpenCL";
+#else
+        return "ViennaCL";
+#endif
+
+#else
+
+#if !USE_CUSPARSE_LOW_LEVEL
+        return "cuSPARSE High Level API";
+#else
+        return "cuSPARSE Low Level API";
+#endif
+
+#endif
 }

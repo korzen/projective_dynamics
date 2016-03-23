@@ -343,8 +343,9 @@ renderGUI()
 {
         ImGui_ImplGlfwGL3_NewFrame();
 
-        ImGui::Text("Local CMA:  %.3f", pd_solver_local_cma(solver));
-        ImGui::Text("Global CMA: %.3f", pd_solver_global_cma(solver));
+        ImGui::Text("Solver: %s", pd_solver_name(solver));
+        ImGui::Text("Local CMA:  %.3fms", pd_solver_local_cma(solver));
+        ImGui::Text("Global CMA: %.3fms", pd_solver_global_cma(solver));
 
         ImGui::Render();
 }

@@ -50,6 +50,8 @@ pd_solver_global_cma(struct PdSolver const *solver);
 double
 pd_solver_local_cma(struct PdSolver const *solver);
 
+char const *
+pd_solver_name(struct PdSolver const *solver);
 
 #ifdef __cplusplus
 }
