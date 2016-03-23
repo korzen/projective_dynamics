@@ -48,6 +48,7 @@ static uint32_t resolution_y = 16;
 static char *mesh_filename;
 static mat4_t rotation_obj;
 static bool hover = false;
+static vec4_t gravity = VEC4(0.0f, 0.0f, -9.8f, 0.0f);
 
 
 static quat_t
@@ -163,15 +164,15 @@ cursor_pos_cb(GLFWwindow *window, double x_pos, double y_pos)
         mat4_mul(&ubo_mapped->view, &rotation, &ubo_mapped->view);
 
         /* invert rotation matrix to find new gravity force */
+/*
         mat4_t rotation_obj_inv;
         mat4_inv(&rotation_obj_inv, &rotation_obj);
-        vec4_t gravity = VEC4(0.0f, -9.8f, 0.0f, 0.0f);
         vec4_t force;
         mat4_vec4_mul(&force, &rotation_obj_inv, &gravity);
 
-        /* swap y and z axis */
         force = VEC4(force.x, force.z, force.y, force.w);
         pd_solver_set_ext_force(solver, force.v);
+*/
 }
 
 
@@ -191,7 +192,10 @@ static void
 key_cb(GLFWwindow *window, int key, int scancode, int action, int mods){
         if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE){
                 glfwSetWindowShouldClose(window, 1);
+                return;
         }
+
+        ImGui_ImplGlfwGL3_KeyCallback(window, key, scancode, action, mods);
 }
 
 static void
@@ -347,6 +351,9 @@ renderGUI()
         ImGui::Text("Local CMA:  %.3fms", pd_solver_local_cma(solver));
         ImGui::Text("Global CMA: %.3fms", pd_solver_global_cma(solver));
 
+        if (ImGui::InputFloat3("gravity vector", gravity.v))
+                pd_solver_set_ext_force(solver, gravity.v);
+
         ImGui::Render();
 }
 
@@ -418,11 +425,12 @@ main(int argc, char **argv)
 
         glfwMakeContextCurrent(window);
 
+        glfwSetCharCallback(window, ImGui_ImplGlfwGL3_CharCallback);
         glfwSetCursorPosCallback(window, cursor_pos_cb);
+        glfwSetKeyCallback(window, key_cb);
         glfwSetMouseButtonCallback(window, mouse_button_cb);
         glfwSetScrollCallback(window, scroll_cb);
         glfwSetWindowSizeCallback(window, resize);
-        glfwSetKeyCallback(window, key_cb);
 
         ImGui_ImplGlfwGL3_Init(window, false);
 
