@@ -1,6 +1,8 @@
 #ifndef PK_LINALG_H
 #define PK_LINALG_H
 
+#define restrict __restrict
+
 typedef union {
         struct { float x, y; };
         float v[2];
@@ -68,6 +70,9 @@ void
 mat4_scale(mat4_t *m, float const x, float const y, float const z);
 
 void
+mat4_vec4_mul(vec4_t *restrict res, mat4_t const *m, vec4_t const *restrict v);
+
+void
 quat_mul(quat_t *res, quat_t const *restrict q0, quat_t const *restrict q1);
 
 void
@@ -77,7 +82,7 @@ quat_mat4(mat4_t *restrict m, quat_t const *restrict q);
 #ifdef PK_LINALG_IMPLEMENTATION
 
 #include <assert.h>
-#include <tgmath.h>
+#include <math.h>
 
 
 vec2_t

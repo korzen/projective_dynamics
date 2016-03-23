@@ -20,7 +20,7 @@ pk_io_read_file(char const filename[])
         long const size = ftell(fp);
         rewind(fp);
 
-        char *string = malloc(size + 1);
+        char *string = (char *)malloc(size + 1);
         size_t const read = fread(string, 1, size, fp);
         fclose(fp);
         string[read] = '\0';

@@ -1,7 +1,7 @@
 CC       ?= gcc
 CXX      ?= g++
-CFLAGS   = -std=c11 -g -I./ -Iext/ -O3 -Wall -Wextra -fopenmp -fstrict-aliasing -march=native `pkg-config --cflags glfw3 epoxy`
-CXXFLAGS = -std=c++14 -g -O3 -Wall -Wextra -fopenmp -fstrict-aliasing -march=native
+CFLAGS   = -std=c11 -g -I./ -O3 -Wall -Wextra -fstrict-aliasing -march=native
+CXXFLAGS = -std=c++14 -g -I./ -Iext/ -O3 -Wall -Wextra -fopenmp -fstrict-aliasing -march=native `pkg-config --cflags epoxy glfw3`
 CUDA_LIBS= -L/usr/local/cuda-7.5/lib64/ -lcudart -lcusolver -lcusparse
 LDFLAGS  = -lm `pkg-config --libs glfw3 epoxy` -l:ext/jsmn/libjsmn.a
 EIGEN3   = `pkg-config --cflags eigen3`
@@ -27,10 +27,13 @@ else
 endif
 
 all: build_dir $(PD_SO_NAME) build_jsmn
-	$(CC) $(CFLAGS) -c src/pd_io.c -o obj/pd_io.o
-	$(CC) $(CFLAGS) -c src/pd_linalg.c -o obj/pd_linalg.o
-	$(CC) $(CFLAGS) -c src/main.c -o obj/main.o
-	$(CXX) $(CFLAGS) obj/pd_io.o obj/pd_linalg.o obj/main.o -o pd $(LDFLAGS) -L. -l $(LIBPD_SOLVER) $(CUDA_LIBS)
+	$(CXX) $(CXXFLAGS) -c src/pd_io.c -o obj/pd_io.o
+	$(CXX) $(CXXFLAGS) -c src/pd_linalg.c -o obj/pd_linalg.o
+	$(CXX) $(CXXFLAGS) -c src/main.c -o obj/main.o
+	$(CXX) $(CXXFLAGS) -Iext/imgui -c ext/imgui/imgui_impl_glfw_gl3.cpp -o obj/imgui_impl_glfw_gl3.o
+	$(CXX) $(CXXFLAGS) -c ext/imgui/imgui.cpp -o obj/imgui.o
+	$(CXX) $(CXXFLAGS) -c ext/imgui/imgui_draw.cpp -o obj/imgui_draw.o
+	$(CXX) $(CXXFLAGS) obj/pd_io.o obj/pd_linalg.o obj/main.o obj/imgui_impl_glfw_gl3.o obj/imgui.o obj/imgui_draw.o -o pd $(LDFLAGS) -L. -l $(LIBPD_SOLVER)
 
 libpd_solver_eigen.so: src/backend/pd_eigen.cpp
 	$(CXX) $(CXXFLAGS) $(EIGEN3) --shared -fPIC $^ -o $@

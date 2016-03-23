@@ -1,2 +1,5 @@
 #define PK_IO_IMPLEMENTATION
-#include <pk/pk_io.h>
+
+extern "C" {
+        #include <pk/pk_io.h>
+}

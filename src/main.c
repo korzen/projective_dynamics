@@ -7,9 +7,14 @@
 #include <time.h>
 
 #include <epoxy/gl.h>
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_glfw_gl3.h>
 #include <GLFW/glfw3.h>
-#include <pk/pk_io.h>
-#include <pk/pk_linalg.h>
+
+extern "C" {
+        #include <pk/pk_io.h>
+        #include <pk/pk_linalg.h>
+}
 
 #include "pd_mesh.h"
 #include "pd_solver.h"
@@ -29,7 +34,7 @@ static GLuint  vbo;
 static quat_t cur_quat;
 static uint32_t n_positions;
 static float *positions_mapped;
-static struct {
+static struct MatBlock {
         mat4_t model;
         mat4_t view;
         mat4_t projection;
@@ -147,12 +152,12 @@ cursor_pos_cb(GLFWwindow *window, double x_pos, double y_pos)
                 return;
 
         quat_t const tmp = mouse_quat(window);
-        quat_t new;
-        quat_mul(&new, &cur_quat, &tmp);
+        quat_t new_q;
+        quat_mul(&new_q, &cur_quat, &tmp);
         cur_quat = tmp;
 
         mat4_t rotation;
-        quat_mat4(&rotation, &new);
+        quat_mat4(&rotation, &new_q);
         mat4_mul(&rotation_obj, &rotation, &rotation_obj);
         mat4_mul(&ubo_mapped->view, &rotation, &ubo_mapped->view);
 
@@ -252,7 +257,7 @@ realize()
         glNamedBufferStorage(vbo, mesh->n_positions*3*sizeof *mesh->positions, mesh->positions, flags);
 
         /* map position buffer, topology of mesh does not change so we do not map indices */
-        positions_mapped = glMapNamedBufferRange(vbo, 0, mesh->n_positions*3*sizeof *mesh->positions, flags);
+        positions_mapped = (float *)glMapNamedBufferRange(vbo, 0, mesh->n_positions*3*sizeof *mesh->positions, flags);
 
 
         glCreateBuffers(N_EBOS, ebos);
@@ -261,7 +266,7 @@ realize()
         /* TODO: DOD on springs so we can pass pointer directly */
         lines_count             = 2*mesh->n_springs;
         size_t const lines_size = lines_count*sizeof *mesh->indices;
-        uint32_t *lines_indices = malloc(lines_size);
+        uint32_t *lines_indices = (uint32_t *)malloc(lines_size);
         for (uint32_t i = 0; i < mesh->n_springs; ++i)
                 memcpy(lines_indices + 2*i, mesh->springs[i].i, 2*sizeof *lines_indices);
         glNamedBufferStorage(ebos[EBO_LINES], lines_size, lines_indices, 0);
@@ -272,7 +277,7 @@ realize()
         glNamedBufferStorage(ubo, sizeof *ubo_mapped, NULL, flags | GL_MAP_READ_BIT);
         glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo);
 
-        ubo_mapped = glMapNamedBufferRange(ubo, 0, sizeof *ubo_mapped, flags | GL_MAP_READ_BIT);
+        ubo_mapped = (struct MatBlock *)glMapNamedBufferRange(ubo, 0, sizeof *ubo_mapped, flags | GL_MAP_READ_BIT);
 
         /* flip y and z axes */
         ubo_mapped->model         = MAT4;
@@ -324,6 +329,17 @@ render()
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_LINES]);
         glDrawElements(GL_LINES, lines_count, GL_UNSIGNED_INT, NULL);
         glDrawArrays(GL_POINTS, 0, n_positions);
+}
+
+
+static void
+renderGUI()
+{
+        ImGui_ImplGlfwGL3_NewFrame();
+
+        ImGui::Text("Hello World");
+
+        ImGui::Render();
 }
 
 
@@ -400,10 +416,13 @@ main(int argc, char **argv)
         glfwSetWindowSizeCallback(window, resize);
         glfwSetKeyCallback(window, key_cb);
 
+        ImGui_ImplGlfwGL3_Init(window, false);
+
         realize();
 
         while (!glfwWindowShouldClose(window)) {
                 render();
+                renderGUI();
                 glfwSwapBuffers(window);
                 glfwPollEvents();
         }

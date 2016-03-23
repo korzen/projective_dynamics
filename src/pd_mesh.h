@@ -32,11 +32,7 @@ mk_spring(float const *positions, uint32_t const i0, uint32_t const i1)
         float const *p0 = positions + 3*i0;
         float const *p1 = positions + 3*i1;
         float const rest_length = sqrt(pow(p1[0] - p0[0], 2) + pow(p1[1] - p0[1], 2) + pow(p1[2] - p0[2], 2));
-        struct PdConstraintSpring s = {
-                .i[0] = i0,
-                .i[1] = i1,
-                .rest_length = rest_length,
-        };
+        struct PdConstraintSpring s = { i0, i1, rest_length, };
         return s;
 }
 
@@ -48,10 +44,10 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
         /* must generate at least one quad (n_x = 2, n_y = 2) */
         assert(n_x > 1 && n_y > 1);
 
-        struct PdMeshSurface *m = malloc(sizeof *m);
+        struct PdMeshSurface *m = (struct PdMeshSurface *)malloc(sizeof *m);
 
         m->n_positions = n_x*n_y;
-        m->positions   = malloc(3*m->n_positions*sizeof *m->positions);
+        m->positions   = (float *)malloc(3*m->n_positions*sizeof *m->positions);
         for (uint32_t j = 0; j < n_y; ++j) {
                 for (uint32_t i = 0; i < n_x; ++i) {
                         /* convert to NDC */
@@ -65,7 +61,7 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
         /* diagonal goes from top-left corner */
         /* 3 indices per triangles; 2 triangles per quad */
         m->n_indices = 3*2*(n_x - 1)*(n_y - 1);
-        m->indices   = malloc(m->n_indices*sizeof *m->indices);
+        m->indices   = (uint32_t *)malloc(m->n_indices*sizeof *m->indices);
         for (uint32_t j = 0; j + 1 < n_y; ++j) {
                 for (uint32_t i = 0; i + 1 < n_x; ++i) {
                         /* generate two triangles for the quad */
@@ -92,7 +88,7 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
         /* spring constraints of quad mesh */
         uint32_t const n_springs = 2*(n_x - 1)*(n_y - 1) + (n_y - 1) + (n_x - 1);
         m->n_springs = 0;
-        m->springs   = malloc(n_springs*sizeof *m->springs);
+        m->springs   = (struct PdConstraintSpring *)malloc(n_springs*sizeof *m->springs);
         /* generate upper corner constraints */
         for (uint32_t j = 0; j + 1 < n_y; ++j) {
                 for (uint32_t i = 0; i + 1 < n_x; ++i) {
@@ -109,7 +105,7 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
 
         /* create net */
         m->n_attachments  = 4;
-        m->attachments    = malloc(m->n_attachments*sizeof *m->attachments);
+        m->attachments    = (struct PdConstraintAttachment *)malloc(m->n_attachments*sizeof *m->attachments);
 
         /*
         m->attachments[0] = (struct PdConstraintAttachment){ 0, { m->positions[0], m->positions[1], m->positions[2], }, };
@@ -176,7 +172,7 @@ pd_mesh_surface_mk_from_json(char const *json)
         jsmn_init(&parser);
 
         size_t const n_tokens = 1 << 20;
-        jsmntok_t *t = malloc(n_tokens*sizeof *t);
+        jsmntok_t *t = (jsmntok_t *)malloc(n_tokens*sizeof *t);
         int const r = jsmn_parse(&parser, json, strlen(json), t, n_tokens);
         if (r < 0) {
                 puts("problem parsing the data");
@@ -184,7 +180,7 @@ pd_mesh_surface_mk_from_json(char const *json)
                 return NULL;
         }
 
-        struct PdMeshSurface *m = malloc(sizeof *m);
+        struct PdMeshSurface *m = (struct PdMeshSurface *)malloc(sizeof *m);
         m->n_positions   = 0;
         m->n_indices     = 0;
         m->n_attachments = 0;
@@ -194,13 +190,13 @@ pd_mesh_surface_mk_from_json(char const *json)
         for (int i = 0; i < r;) {
                 if (json_eq(json, t + i, "attachments")) {
                         m->n_attachments = t[++i].size;
-                        m->attachments   = malloc(m->n_attachments*sizeof *m->attachments);
+                        m->attachments   = (struct PdConstraintAttachment *)malloc(m->n_attachments*sizeof *m->attachments);
 
                         for (uint32_t o = 0; o < m->n_attachments; ++o)
                                 i = parse_attachment(m->attachments + o, json, t, i, r);
                 } else if (json_eq(json, t + i, "indices")) {
                         m->n_indices = 3*t[++i].size;
-                        m->indices   = malloc(m->n_indices*sizeof *m->indices);
+                        m->indices   = (uint32_t *)malloc(m->n_indices*sizeof *m->indices);
 
                         uint32_t o = 0;
                         for (++i; i < r && t[i].type == JSMN_ARRAY; ++i) {
@@ -209,13 +205,13 @@ pd_mesh_surface_mk_from_json(char const *json)
                         }
                 } else if (json_eq(json, t + i, "springs")) {
                         m->n_springs = t[++i].size;
-                        m->springs   = malloc(m->n_springs*sizeof *m->springs);
+                        m->springs   = (struct PdConstraintSpring *)malloc(m->n_springs*sizeof *m->springs);
 
                         for (uint32_t o = 0; o < m->n_springs; ++o)
                                 i = parse_spring(m->springs + o, json, t, i, r);
                 } else if (json_eq(json, t + i, "vertices")) {
                         m->n_positions = t[++i].size;
-                        m->positions   = malloc(3*m->n_positions*sizeof *m->positions);
+                        m->positions   = (float *)malloc(3*m->n_positions*sizeof *m->positions);
 
                         uint32_t o = 0;
                         for (++i; i < r && t[i].type == JSMN_ARRAY; ++i) {
