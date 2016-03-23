@@ -1,4 +1,5 @@
 #define USE_CUSTOM_KERNELS 1
+#define USE_PRECONDITIONER 0
 
 #include <cassert>
 #include <vector>
@@ -65,6 +66,8 @@ struct PdSolver {
         viennacl::compressed_matrix<float> l_mat;
         viennacl::compressed_matrix<float> j_mat;
         viennacl::compressed_matrix<float> a_mat;
+        
+        viennacl::linalg::ilut_precond<viennacl::compressed_matrix<float>> *ilut_mat;
 
         std::vector<PdConstraintAttachment> attachments;
         viennacl::vector<float> attachment_pos;
@@ -211,6 +214,7 @@ pd_solver_alloc(float const                         *positions,
         build_sparse_mat.clear();
         build_sparse_mat.resize(3 * n_positions, std::map<unsigned int, float>());
         // TODO what is offset for in pavol's code?
+        // the offset guarantess that springs go right after attachments (could use solver->n_attachments)
         size_t offset = 0;
         for (const auto &c : solver->attachments){
                 for (size_t j = 0; j < 3; ++j){
@@ -230,7 +234,11 @@ pd_solver_alloc(float const                         *positions,
         solver->j_mat = viennacl::compressed_matrix<float>(3 * n_positions, 3 * offset);
         viennacl::copy(build_sparse_mat, solver->j_mat);
 
-        // TODO: preconditioner
+        // TODO: preconditioner settings
+#if USE_PRECONDITIONER
+        const viennacl::linalg::ilut_tag ilut_conf(100, 1e-10);
+        solver->ilut_mat = new viennacl::linalg::ilut_precond<viennacl::compressed_matrix<float>>(solver->a_mat, ilut_conf);
+#endif
 
 #if USE_CUSPARSE
         std::cout << "Setting up for cuSPARSE solver\n";
@@ -302,6 +310,10 @@ pd_solver_free(struct PdSolver *solver)
         cusolverSpDestroyCsrcholInfo(solver->cusolver_chol_info);
         cudaFree(solver->cu_workspace);
 #endif
+#endif
+
+#if USE_PRECONDITIONER
+        delete solver->ilut_mat;
 #endif
         delete solver;
 }
@@ -435,8 +447,12 @@ pd_solver_advance(struct PdSolver *solver){
         clock_gettime(CLOCK_MONOTONIC, &global_start);
 #if !USE_CUSPARSE
         // Solve the system with ViennaCL's CG solver
-        // TODO: We should precondition the system
+#if USE_PRECONDITIONER
+        solver->positions = viennacl::linalg::solve(solver->a_mat, b, viennacl::linalg::cg_tag(), *solver->ilut_mat);
+#else
         solver->positions = viennacl::linalg::solve(solver->a_mat, b, viennacl::linalg::cg_tag());
+#endif
+
 #else
 #if !USE_CUSPARSE_LOW_LEVEL
         // Solve the system with cuSPARSE's higher level API
