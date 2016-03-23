@@ -42,6 +42,15 @@ float const *
 pd_solver_map_positions(struct PdSolver const *solver);
 
 
+/* TODO: should we also provide last frame time? */
+double
+pd_solver_global_cma(struct PdSolver const *solver);
+
+
+double
+pd_solver_local_cma(struct PdSolver const *solver);
+
+
 #ifdef __cplusplus
 }
 #endif

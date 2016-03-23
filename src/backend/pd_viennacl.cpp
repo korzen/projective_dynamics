@@ -483,3 +483,12 @@ pd_solver_map_positions(struct PdSolver const *solver){
         return sv->mapped_positions.data();
 }
 
+double
+pd_solver_global_cma(const struct PdSolver *solver){
+        return solver->global_cma;
+}
+
+double
+pd_solver_local_cma(const struct PdSolver *solver){
+        return solver->local_cma;
+}

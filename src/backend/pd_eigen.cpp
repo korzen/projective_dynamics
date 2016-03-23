@@ -252,3 +252,17 @@ pd_solver_map_positions(struct PdSolver const *solver)
 {
         return solver->positions.data();
 }
+
+
+double
+pd_solver_global_cma(struct PdSolver const *solver)
+{
+        return solver->global_cma;
+}
+
+
+double
+pd_solver_local_cma(struct PdSolver const *solver)
+{
+        return solver->local_cma;
+}

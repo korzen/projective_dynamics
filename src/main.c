@@ -47,6 +47,7 @@ static uint32_t resolution_x = 16;
 static uint32_t resolution_y = 16;
 static char *mesh_filename;
 static mat4_t rotation_obj;
+static bool hover = false;
 
 
 static quat_t
@@ -148,7 +149,7 @@ mouse_button_cb(GLFWwindow *window, int button, int action, int mods)
 static void 
 cursor_pos_cb(GLFWwindow *window, double x_pos, double y_pos)
 {
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != GLFW_PRESS)
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != GLFW_PRESS || hover)
                 return;
 
         quat_t const tmp = mouse_quat(window);
@@ -313,12 +314,17 @@ realize()
 
 
 static void
+simulate()
+{
+        for (uint32_t i = 0; i < n_iterations; ++i)
+                pd_solver_advance(solver);
+}
+
+
+static void
 render()
 {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        for (uint32_t i = 0; i < n_iterations; ++i)
-                pd_solver_advance(solver);
 
         /* TODO: avoid memcpy by passing pointer to advance solver */
         memcpy(positions_mapped, pd_solver_map_positions(solver), n_positions*3*sizeof *positions_mapped);
@@ -337,7 +343,8 @@ renderGUI()
 {
         ImGui_ImplGlfwGL3_NewFrame();
 
-        ImGui::Text("Hello World");
+        ImGui::Text("Local CMA:  %.3f", pd_solver_local_cma(solver));
+        ImGui::Text("Global CMA: %.3f", pd_solver_global_cma(solver));
 
         ImGui::Render();
 }
@@ -421,8 +428,12 @@ main(int argc, char **argv)
         realize();
 
         while (!glfwWindowShouldClose(window)) {
+                simulate();
                 render();
                 renderGUI();
+
+                hover = ImGui::IsMouseHoveringAnyWindow();
+
                 glfwSwapBuffers(window);
                 glfwPollEvents();
         }
