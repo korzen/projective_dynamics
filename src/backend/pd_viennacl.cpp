@@ -1,4 +1,4 @@
-#define USE_CUSTOM_KERNELS 0
+#define USE_CUSTOM_KERNELS 1
 
 #include <cassert>
 #include <vector>
@@ -19,13 +19,19 @@
 #include "../pd_time.h"
 #include "../pd_solver.h"
 
+#if USE_CUSTOM_KERNELS
+#define CU_DEVICE_EXPORT __device__ __host__
+#else
+#define CU_DEVICE_EXPORT
+#endif
+
 // ViennaCL doesn't have small host vectors so we need a lightweight
 // vec3f type to do some constraint computation
 struct vec3f {
         float x, y, z;
        
         vec3f(){ vec3f(0.0f, 0.0f, 0.0f); }
-        vec3f(float x, float y, float z) : x(x), y(y), z(z){}
+        CU_DEVICE_EXPORT vec3f(float x, float y, float z) : x(x), y(y), z(z){}
         vec3f(float x[3]) : x(x[0]), y(x[1]), z(x[2]){}
         float length() const {
                 return std::sqrt(x * x + y * y + z * z);
@@ -72,7 +78,7 @@ struct PdSolver {
 #if USE_CUSPARSE_LOW_LEVEL
         csrcholInfo_t cusolver_chol_info;
         void *cu_workspace;
-		size_t a_mat_size1;
+        size_t a_mat_size1;
 #endif
 #endif
 
@@ -139,6 +145,9 @@ pd_solver_alloc(float const                         *positions,
                         vf_build.push_back(c.position[1]);
                         vf_build.push_back(c.position[2]);
                 }
+                // TODO: We crash here when there are 0 attachments
+                // If we add an attachment to the ant then the program just exits? Why?
+                // What's different from chihuahua besides size?
                 viennacl::copy(vf_build.begin(), vf_build.end(), solver->attachment_pos.begin());
         }
 
@@ -276,9 +285,9 @@ pd_solver_alloc(float const                         *positions,
         if (status != CUSOLVER_STATUS_SUCCESS){
                 std::cout << "cusolver error factorizing matrix\n";
         }
-		solver->a_mat_size1 = solver->a_mat.size1();
-		// Dump the old matrix
-		solver->a_mat.resize(1, 1, false);
+        solver->a_mat_size1 = solver->a_mat.size1();
+        // Dump the old matrix
+        solver->a_mat.resize(1, 1, false);
 #endif
 #endif
         return solver;
@@ -300,13 +309,12 @@ pd_solver_free(struct PdSolver *solver)
 
 #if defined(VIENNACL_WITH_CUDA) && USE_CUSTOM_KERNELS
 // Kernel to set up the external acceleration vector
-__global__ void set_external_acceleration(float *out, const int size){
-        float const gravity = -9.81f;
+__global__ void set_external_acceleration(float *out, const int size, const vec3f ext_force){
         const int i = blockIdx.x * blockDim.x + threadIdx.x;
         if (i < size){
-                out[3 * i] = 0.0f;
-                out[3 * i + 1] = 0.0f;
-                out[3 * i + 2] = gravity;
+                out[3 * i] = ext_force.x;
+                out[3 * i + 1] = ext_force.y;
+                out[3 * i + 2] = ext_force.z;
         }
 }
 // Kernel to set the position attachment constraints
@@ -376,7 +384,7 @@ pd_solver_advance(struct PdSolver *solver){
         viennacl::copy(vec_build.begin(), vec_build.end(), ext_force.begin());
 #else
         set_external_acceleration<<<(solver->positions.size() / 3) / 32 + 1, 32>>>(viennacl::cuda_arg(ext_force),
-                solver->positions.size() / 3);
+                solver->positions.size() / 3, solver->ext_force);
 #endif
         ext_force = viennacl::linalg::prod(solver->mass_mat, ext_force);
 
