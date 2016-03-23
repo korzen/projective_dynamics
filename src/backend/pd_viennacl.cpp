@@ -450,7 +450,11 @@ pd_solver_advance(struct PdSolver *solver){
 #if USE_PRECONDITIONER
         solver->positions = viennacl::linalg::solve(solver->a_mat, b, viennacl::linalg::cg_tag(), *solver->ilut_mat);
 #else
-        solver->positions = viennacl::linalg::solve(solver->a_mat, b, viennacl::linalg::cg_tag());
+        // default cg uses tolerance 1e-8 and at most 300 iterations
+        const viennacl::linalg::cg_tag custom_cg;
+        solver->positions = viennacl::linalg::solve(solver->a_mat, b, custom_cg);\
+        printf("Number of iterations: %u\n", custom_cg.iters());
+        printf("Error: %f\n", custom_cg.error());
 #endif
 
 #else
