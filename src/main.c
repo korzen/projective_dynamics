@@ -46,9 +46,15 @@ static float timestep = 1.0f/(60.0f*10);
 static uint32_t resolution_x = 16;
 static uint32_t resolution_y = 16;
 static char *mesh_filename;
-static mat4_t rotation_obj;
+
+/* view control matrices */
+static mat4_t rotation = MAT4;
+static mat4_t panning  = MAT4;
+static mat4_t zoom     = MAT4;
+
 static bool hover = false;
 static vec4_t gravity = VEC4(0.0f, 0.0f, -9.8f, 0.0f);
+static double x_pos_prev, y_pos_prev;
 
 
 static quat_t
@@ -143,49 +149,72 @@ debug(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
 static void
 mouse_button_cb(GLFWwindow *window, int button, int action, int mods)
 {
-        cur_quat = mouse_quat(window);
+        cur_quat   = mouse_quat(window);
+        glfwGetCursorPos(window, &x_pos_prev, &y_pos_prev);
 }
 
 
 static void 
 cursor_pos_cb(GLFWwindow *window, double x_pos, double y_pos)
 {
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != GLFW_PRESS || hover)
+        /* ImGui widget is hovered so we ingore all events */
+        if (hover)
                 return;
 
-        quat_t const tmp = mouse_quat(window);
-        quat_t new_q;
-        quat_mul(&new_q, &cur_quat, &tmp);
-        cur_quat = tmp;
+        /* left click does rotation of origin centered arcball */
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+                quat_t const tmp = mouse_quat(window);
+                quat_t new_q;
+                quat_mul(&new_q, &cur_quat, &tmp);
+                cur_quat = tmp;
 
-        mat4_t rotation;
-        quat_mat4(&rotation, &new_q);
-        mat4_mul(&rotation_obj, &rotation, &rotation_obj);
-        mat4_mul(&ubo_mapped->view, &rotation, &ubo_mapped->view);
+                mat4_t rotation_diff;
+                quat_mat4(&rotation_diff, &new_q);
+                mat4_mul(&rotation, &rotation_diff, &rotation);
 
-        /* invert rotation matrix to find new gravity force */
-/*
-        mat4_t rotation_obj_inv;
-        mat4_inv(&rotation_obj_inv, &rotation_obj);
-        vec4_t force;
-        mat4_vec4_mul(&force, &rotation_obj_inv, &gravity);
+                goto update;
+        }
 
-        force = VEC4(force.x, force.z, force.y, force.w);
-        pd_solver_set_ext_force(solver, force.v);
-*/
+        /* right click does panning of the camera */
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+                int width, height;
+                glfwGetWindowSize(window, &width, &height);
+
+                /* less efficient but more clean */
+                mat4_t panning_diff = MAT4;
+                panning_diff.c[3][0] = 2.0f*(x_pos - x_pos_prev)/width;
+                panning_diff.c[3][1] = -2.0f*(y_pos - y_pos_prev)/height;
+
+                mat4_mul(&panning, &panning_diff, &panning);
+
+                x_pos_prev = x_pos;
+                y_pos_prev = y_pos;
+
+                goto update;
+        }
+
+        return;
+update:
+        mat4_t tmp;
+        mat4_mul(&tmp, &zoom, &rotation);
+        mat4_mul(&ubo_mapped->view, &panning, &tmp);
 }
 
 
 static void 
 scroll_cb(GLFWwindow *window, double xoffset, double yoffset)
 {
-        mat4_t zoom = MAT4;
+        mat4_t zoom_diff = MAT4;
         if (yoffset > 0.0)
-                mat4_scale(&zoom, 1.1f, 1.1f, 1.1f);
+                mat4_scale(&zoom_diff, 1.1f, 1.1f, 1.1f);
         else
-                mat4_scale(&zoom, 0.9f, 0.9f, 0.9f);
+                mat4_scale(&zoom_diff, 0.9f, 0.9f, 0.9f);
 
-        mat4_mul(&ubo_mapped->view, &zoom, &ubo_mapped->view);
+        mat4_mul(&zoom, &zoom_diff, &zoom);
+
+        mat4_t tmp;
+        mat4_mul(&tmp, &zoom, &rotation);
+        mat4_mul(&ubo_mapped->view, &panning, &tmp);
 }
 
 static void
@@ -403,8 +432,6 @@ main(int argc, char **argv)
         /* TODO: res does not make sense to specify above */
         if (argc > 4)
                 mesh_filename = argv[4];
-
-        rotation_obj = MAT4;
 
         if (!glfwInit())
                 exit(EXIT_FAILURE);
