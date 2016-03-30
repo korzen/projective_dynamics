@@ -17,6 +17,7 @@
 #include <viennacl/matrix.hpp>
 #include <viennacl/compressed_matrix.hpp>
 #include <viennacl/linalg/cg.hpp>
+#include <imgui/imgui.h>
 #include "../pd_time.h"
 #include "../pd_solver.h"
 
@@ -83,6 +84,9 @@ struct PdSolver {
         void *cu_workspace;
         size_t a_mat_size1;
 #endif
+#else
+        float cg_tolerance;
+        int cg_max_iterations;
 #endif
 
         float t2;
@@ -118,6 +122,10 @@ pd_solver_alloc(float const                         *positions,
         solver->n_iters = 0;
         solver->t2 = timestep * timestep;
         solver->ext_force = vec3f(0.0f, 0.0f, -9.83f);
+#if !USE_CUSPARSE
+        solver->cg_tolerance = 1e-8;
+        solver->cg_max_iterations = 300;
+#endif
 
         solver->positions = viennacl::vector<float>(3 * n_positions);
         viennacl::copy(positions, positions + 3 * n_positions, solver->positions.begin());
@@ -454,7 +462,7 @@ pd_solver_advance(struct PdSolver *solver){
         solver->positions = viennacl::linalg::solve(solver->a_mat, b, viennacl::linalg::cg_tag(), *solver->ilut_mat);
 #else
         // default cg uses tolerance 1e-8 and at most 300 iterations
-        const viennacl::linalg::cg_tag custom_cg;
+        const viennacl::linalg::cg_tag custom_cg(solver->cg_tolerance, solver->cg_max_iterations);
         solver->positions = viennacl::linalg::solve(solver->a_mat, b, custom_cg);
         //printf("Number of iterations: %u\n", custom_cg.iters());
         //printf("Error: %f\n", custom_cg.error());
@@ -551,4 +559,21 @@ double
 pd_solver_local_time(struct PdSolver const *solver)
 {
         return solver->local_time;
+}
+
+void
+pd_solver_draw_ui(struct PdSolver *solver)
+{
+#if !USE_CUSPARSE
+        if (ImGui::Begin(pd_solver_name(solver))){
+                ImGui::InputFloat("CG Tolerance", &solver->cg_tolerance, 0.0f, 0.0f, -1,
+                        ImGuiInputTextFlags_CharsDecimal);
+
+                ImGui::InputInt("CG Tolerance", &solver->cg_max_iterations, 1, 100,
+                        ImGuiInputTextFlags_CharsDecimal);
+                // Make sure we do at least on CG iteration
+                solver->cg_max_iterations = std::max(solver->cg_max_iterations, 1);
+        }
+        ImGui::End();
+#endif
 }

@@ -62,6 +62,8 @@ pd_solver_global_time(struct PdSolver const *solver);
 double
 pd_solver_local_time(struct PdSolver const *solver);
 
+void
+pd_solver_draw_ui(struct PdSolver *solver);
 
 #ifdef __cplusplus
 }

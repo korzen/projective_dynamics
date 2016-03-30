@@ -292,3 +292,8 @@ pd_solver_local_time(struct PdSolver const *solver)
 {
         return solver->local_time;
 }
+
+void
+pd_solver_draw_ui(struct PdSolver *solver)
+{
+}

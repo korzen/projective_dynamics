@@ -383,6 +383,8 @@ render_gui()
         if (ImGui::InputFloat3("gravity vector", gravity.v, -1, ImGuiInputTextFlags_CharsDecimal))
                 pd_solver_set_ext_force(solver, gravity.v);
 
+		pd_solver_draw_ui(solver);
+
         ImGui::Render();
 }
 
