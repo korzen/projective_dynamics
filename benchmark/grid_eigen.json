@@ -2,50 +2,50 @@
         {
                 "n_x": 16,
                 "n_y": 16,
-                "local_cma": 0.133,
-                "global_cma": 0.329,
+                "local_median": 0.014744,
+                "global_median": 0.021867,
                 "unit": "ms"
         },
         {
                 "n_x": 32,
                 "n_y": 32,
-                "local_cma": 0.133,
-                "global_cma": 0.536,
+                "local_median": 0.05627,
+                "global_median": 0.144207,
                 "unit": "ms"
         },
         {
                 "n_x": 64,
                 "n_y": 64,
-                "local_cma": 0.140,
-                "global_cma": 0.652,
+                "local_median": 0.234587,
+                "global_median": 0.840197,
                 "unit": "ms"
         },
         {
                 "n_x": 128,
                 "n_y": 128,
-                "local_cma": 0.256,
-                "global_cma": 1.39,
+                "local_median": 0.980576,
+                "global_median": 4.75358,
                 "unit": "ms"
         },
         {
                 "n_x": 256,
                 "n_y": 256,
-                "local_cma": 0.829,
-                "global_cma": 5.77,
+                "local_median": 4.20122,
+                "global_median": 23.89,
                 "unit": "ms"
         },
         {
                 "n_x": 512,
                 "n_y": 512,
-                "local_cma": 1.45,
-                "global_cma": 35.36,
+                "local_median": 17.4904,
+                "global_median": 109.025,
                 "unit": "ms"
         },
         {
                 "n_x": 1024,
                 "n_y": 1024,
-                "local_cma": 4.76,
-                "global_cma": 269.31,
+                "local_median": 87.4217,
+                "global_median": 582.857,
                 "unit": "ms"
         }
 ]

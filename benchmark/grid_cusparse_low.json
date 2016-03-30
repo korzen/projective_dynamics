@@ -2,36 +2,36 @@
         {
                 "n_x": 16,
                 "n_y": 16,
-                "local_cma": 0.239,
-                "global_cma": 0.458,
+                "local_median": 0.100793,
+                "global_median": 0.430269,
                 "unit": "ms"
         },
         {
                 "n_x": 32,
                 "n_y": 32,
-                "local_cma": 0.148,
-                "global_cma": 3.996,
+                "local_median": 0.106316,
+                "global_median": 3.97595,
                 "unit": "ms"
         },
         {
                 "n_x": 64,
                 "n_y": 64,
-                "local_cma": 0.305,
-                "global_cma": 21.991,
+                "local_median": 0.275527,
+                "global_median": 22.092,
                 "unit": "ms"
         },
         {
                 "n_x": 128,
                 "n_y": 128,
-                "local_cma": 0.304,
-                "global_cma": 78.017,
+                "local_median": 0.27573,
+                "global_median": 77.7189,
                 "unit": "ms"
         },
         {
                 "n_x": 256,
                 "n_y": 256,
-                "local_cma": 0.873,
-                "global_cma": 396.650,
+                "local_median": 0.813294,
+                "global_median": 332.012,
                 "unit": "ms"
         }
 ]
