@@ -372,7 +372,7 @@ render()
 
 
 static void
-renderGUI()
+render_gui()
 {
         ImGui_ImplGlfwGL3_NewFrame();
 
@@ -380,7 +380,7 @@ renderGUI()
         ImGui::Text("Local CMA:  %.3fms", pd_solver_local_cma(solver));
         ImGui::Text("Global CMA: %.3fms", pd_solver_global_cma(solver));
 
-        if (ImGui::InputFloat3("gravity vector", gravity.v))
+        if (ImGui::InputFloat3("gravity vector", gravity.v, -1, ImGuiInputTextFlags_CharsDecimal))
                 pd_solver_set_ext_force(solver, gravity.v);
 
         ImGui::Render();
@@ -466,7 +466,7 @@ main(int argc, char **argv)
         while (!glfwWindowShouldClose(window)) {
                 simulate();
                 render();
-                renderGUI();
+                render_gui();
 
                 hover = ImGui::IsMouseHoveringAnyWindow();
 
