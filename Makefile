@@ -1,7 +1,8 @@
 CC       ?= gcc
 CXX      ?= g++
 CFLAGS   = -std=c11 -g -I./ -O3 -Wall -Wextra -fstrict-aliasing -march=native
-CXXFLAGS = -std=c++14 -g -I./ -Iext/ -O3 -Wall -Wextra -fopenmp -fstrict-aliasing -march=native `pkg-config --cflags epoxy glfw3`
+CXXFLAGS = -std=c++14 -g -I./ -Iext/ -O3 -Wall -Wextra -fopenmp -fstrict-aliasing \
+		   -march=native `pkg-config --cflags epoxy glfw3`
 CUDA     ?= /usr/local/cuda/
 LDFLAGS  = -lm `pkg-config --libs glfw3 epoxy` -l:ext/jsmn/libjsmn.a
 EIGEN3   = `pkg-config --cflags eigen3`
@@ -36,16 +37,26 @@ ifneq ($(BACKEND), $(shell test -f $(BACKENDF) && cat $(BACKENDF) || echo "$(BAC
 	UPDATE_BACKEND=$(file > $(BACKENDF),$(BACKEND))
 endif
 
-all: $(UPDATE_BACKEND) build_dir build_jsmn pd
+all: $(UPDATE_BACKEND) build_dir build_jsmn pd pd_benchmark
 
 pd: obj/pd_io.o obj/pd_linalg.o obj/main.o obj/libimgui.a $(PD_SO_NAME) $(BACKENDF)
 	$(CXX) $(CXXFLAGS) obj/pd_io.o obj/pd_linalg.o obj/main.o -o pd $(LDFLAGS) \
 	    -L./obj/ -l imgui -L. -l $(LIBPD_SOLVER) $(CUDA_LIBS)
 
+pd_benchmark: obj/benchmark.o obj/pd_io.o obj/pd_linalg.o $(PD_SO_NAME) $(BACKENDF)
+	$(CXX) $(CXXFLAGS) obj/pd_io.o obj/pd_linalg.o obj/benchmark.o -o $@ $(LDFLAGS) \
+		-L./obj/ -L. -l $(LIBPD_SOLVER) $(CUDA_LIBS)
+
 obj/libimgui.a: obj/imgui/imgui_impl_glfw_gl3.o obj/imgui/imgui.o obj/imgui/imgui_draw.o
 	ar rcs obj/libimgui.a $^
 
+obj/libpico_bench.a: obj/pico_bench.o
+	ar rcs obj/libpico_bench.a $^
+
 obj/%.o: src/%.c
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
+
+obj/%.o: src/%.cpp
 	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 obj/imgui/%.o: ext/imgui/%.cpp

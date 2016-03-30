@@ -16,3 +16,4 @@ pd
 *.brf
 imgui.ini
 active_backend.txt
+pd_benchmark
