@@ -125,7 +125,7 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
 static int
 json_eq(char const *json, jsmntok_t const *tok, char const *str)
 {
-        return tok->type == JSMN_STRING && tok->end - tok->start == strlen(str) && !strncmp(json + tok->start, str, tok->end - tok->start);
+        return tok->type == JSMN_STRING && (size_t)tok->end - (size_t)tok->start == strlen(str) && !strncmp(json + tok->start, str, tok->end - tok->start);
 }
 
 
