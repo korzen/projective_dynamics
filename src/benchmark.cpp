@@ -96,16 +96,17 @@ int main(int argc, char **argv){
         // We're also custom timing the local and global steps as well
         std::vector<millis> local_steps;
         std::vector<millis> global_steps;
-        local_steps.reserve(n_iterations);
-        global_steps.reserve(n_iterations);
+        local_steps.reserve(bench_iters * n_iterations);
+        global_steps.reserve(bench_iters * n_iterations);
         auto full_solve_stats = bencher([&](){
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint32_t i = 0; i < n_iterations; ++i){
                         pd_solver_advance(solver);
+
+                        local_steps.push_back(millis{pd_solver_local_time(solver)});
+                        global_steps.push_back(millis{pd_solver_global_time(solver)});
                 }
                 auto end = std::chrono::high_resolution_clock::now();
-                local_steps.push_back(millis{pd_solver_local_cma(solver)});
-                global_steps.push_back(millis{pd_solver_global_cma(solver)});
                 return std::chrono::duration_cast<millis>(end - start);
         });
         pb::Statistics<millis> local_stats{std::move(local_steps)};
