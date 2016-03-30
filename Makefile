@@ -39,19 +39,16 @@ endif
 
 all: $(UPDATE_BACKEND) build_dir build_jsmn pd pd_benchmark
 
-pd: obj/pd_io.o obj/pd_linalg.o obj/main.o obj/libimgui.a $(PD_SO_NAME) $(BACKENDF)
+pd: obj/pd_io.o obj/pd_linalg.o obj/main.o obj/libimgui.so $(PD_SO_NAME) $(BACKENDF)
 	$(CXX) $(CXXFLAGS) obj/pd_io.o obj/pd_linalg.o obj/main.o -o pd $(LDFLAGS) \
-	    -L./obj/ -l imgui -L. -l $(LIBPD_SOLVER) $(CUDA_LIBS)
+	    -Wl,-rpath,./obj -L./obj/ -l imgui -L. -l $(LIBPD_SOLVER) $(CUDA_LIBS)
 
 pd_benchmark: obj/benchmark.o obj/pd_io.o obj/pd_linalg.o $(PD_SO_NAME) $(BACKENDF)
 	$(CXX) $(CXXFLAGS) obj/pd_io.o obj/pd_linalg.o obj/benchmark.o -o $@ $(LDFLAGS) \
-		-L./obj/ -L. -l $(LIBPD_SOLVER) $(CUDA_LIBS)
+		-Wl,-rpath,./obj -L./obj/ -l imgui -L. -l $(LIBPD_SOLVER) $(CUDA_LIBS)
 
-obj/libimgui.a: obj/imgui/imgui_impl_glfw_gl3.o obj/imgui/imgui.o obj/imgui/imgui_draw.o
-	ar rcs obj/libimgui.a $^
-
-obj/libpico_bench.a: obj/pico_bench.o
-	ar rcs obj/libpico_bench.a $^
+obj/libimgui.so: obj/imgui/imgui_impl_glfw_gl3.o obj/imgui/imgui.o obj/imgui/imgui_draw.o
+	$(CXX) $(CXXFLAGS) -shared -o $@ $^
 
 obj/%.o: src/%.c
 	$(CXX) $(CXXFLAGS) -c $^ -o $@
@@ -60,14 +57,14 @@ obj/%.o: src/%.cpp
 	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 obj/imgui/%.o: ext/imgui/%.cpp
-	$(CXX) $(CXXFLAGS) -Iext/imgui -c $^ -o $@
+	$(CXX) -Iext/imgui -fPIC -c $^ -o $@
 
-libpd_solver_eigen.so: src/backend/pd_eigen.cpp $(BACKENDF)
+libpd_solver_eigen.so: src/backend/pd_eigen.cpp obj/libimgui.so $(BACKENDF)
 	$(CXX) $(CXXFLAGS) $(EIGEN3) --shared -fPIC $< -o $@
 
-libpd_solver_cuda.so: src/backend/pd_viennacl.cpp $(BACKENDF)
+libpd_solver_cuda.so: src/backend/pd_viennacl.cpp obj/libimgui.so $(BACKENDF)
 	nvcc -x cu -arch=compute_52 -code=sm_52 -std=c++11 -O3 $(SOLVER_DEFINES) \
-		--shared -Xcompiler -fPIC $< -o $@
+		--shared -Xcompiler -fPIC -Iext/ $< -o $@ -L./obj/ -limgui
 
 libpd_solver_opencl.so: src/backend/pd_viennacl.cpp $(BACKENDF)
 	$(CXX) $(CXXFLAGS) $(EIGEN3) --shared -fPIC -DVIENNACL_WITH_OPENCL $< -o $@
