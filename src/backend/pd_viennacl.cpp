@@ -93,6 +93,9 @@ struct PdSolver {
         // copy into this vector and return a pointer
         std::vector<float> mapped_positions;
 
+        // Most recent global/local times
+        double   global_time;
+        double   local_time;
         /* cumulative moving average for local and global time */
         double   local_cma;
         double   global_cma;
@@ -452,9 +455,9 @@ pd_solver_advance(struct PdSolver *solver){
 #else
         // default cg uses tolerance 1e-8 and at most 300 iterations
         const viennacl::linalg::cg_tag custom_cg;
-        solver->positions = viennacl::linalg::solve(solver->a_mat, b, custom_cg);\
-        printf("Number of iterations: %u\n", custom_cg.iters());
-        printf("Error: %f\n", custom_cg.error());
+        solver->positions = viennacl::linalg::solve(solver->a_mat, b, custom_cg);
+        //printf("Number of iterations: %u\n", custom_cg.iters());
+        //printf("Error: %f\n", custom_cg.error());
 #endif
 
 #else
@@ -481,10 +484,11 @@ pd_solver_advance(struct PdSolver *solver){
         struct timespec global_end;
         clock_gettime(CLOCK_MONOTONIC, &global_end);
 
-        solver->local_cma = (pd_time_diff_ms(&local_start, &local_end) + solver->n_iters*solver->local_cma)
-            /(solver->n_iters + 1);
-        solver->global_cma = (pd_time_diff_ms(&global_start, &global_end) + solver->n_iters*solver->global_cma)
-            /(solver->n_iters + 1);
+        solver->global_time = pd_time_diff_ms(&global_start, &global_end);
+        solver->local_time = pd_time_diff_ms(&local_start, &local_end);
+
+        solver->global_cma = (solver->global_time + solver->n_iters*solver->global_cma)/(solver->n_iters + 1);
+        solver->local_cma = (solver->local_time + solver->n_iters*solver->local_cma)/(solver->n_iters + 1);
 
         if (solver->n_iters && !(solver->n_iters % 500)) {
                 printf("Local CMA: %f ms\n", solver->local_cma);
@@ -534,4 +538,17 @@ pd_solver_name(struct PdSolver const *solver)
 #endif
 
 #endif
+}
+
+double
+pd_solver_global_time(struct PdSolver const *solver)
+{
+        return solver->global_time;
+}
+
+
+double
+pd_solver_local_time(struct PdSolver const *solver)
+{
+        return solver->local_time;
 }
