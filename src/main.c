@@ -379,6 +379,8 @@ render_gui()
 {
         ImGui_ImplGlfwGL3_NewFrame();
 
+        ImGuiIO &io = ImGui::GetIO();
+        ImGui::Text("Average %.3f ms/frame (%.1f FPS)", 1000.f / io.Framerate, io.Framerate);
         ImGui::Text("Solver: %s", pd_solver_name(solver));
         ImGui::Text("Local CMA:  %.3fms", pd_solver_local_cma(solver));
         ImGui::Text("Global CMA: %.3fms", pd_solver_global_cma(solver));
