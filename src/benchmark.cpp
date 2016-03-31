@@ -1,4 +1,5 @@
 #include <iostream>
+#include <array>
 #include <string>
 #include <cstring>
 #include <algorithm>
@@ -17,18 +18,10 @@ extern "C" {
 
 namespace pb = pico_bench;
 
-struct vec2 {
-    int x, y;
-};
-std::istream& operator>>(std::istream &is, vec2 &v){
-    is >> v.x >> v.y;
-    return is;
-}
-
 bool arg_flag(char **beg, char **end, const std::string &f){
         return std::find(beg, end, f) != end;
 }
-template<class T>
+template<typename T>
 T get_arg(char **beg, char **end, const std::string &f){
         char **it = std::find(beg, end, f);
         if (it != end && ++it != end){
@@ -39,6 +32,19 @@ T get_arg(char **beg, char **end, const std::string &f){
                 return t;
         }
         return T();
+}
+template<typename T, size_t N>
+std::array<T, N> get_arg(char **beg, char **end, const std::string &f){
+        char **it = std::find(beg, end, f);
+        assert(it + 1 != end);
+        ++it;
+        std::array<T, N> arr;
+        for (size_t read = 0; read < N && it != end; ++read, ++it){
+                std::stringstream ss;
+                ss << *it;
+                ss >> arr[read];
+        }
+        return arr;
 }
 
 int main(int argc, char **argv){
@@ -52,20 +58,20 @@ int main(int argc, char **argv){
         if (argc < 3 || bench_iters <= 0 || bench_seconds <= 0){
             std::cout << "Usage: ./pd_benchmark <max iters> <max time in seconds> [options]\n"
                 << "\tmax iters and max time in seconds must be >= 0\nOptions:\n"
-                << "\t--size \"<x> <y>\"    Specify cloth mesh size\n"
-                << "\t--mesh <filename>    Specify tet mesh file to load\n"
-                << "\t-n <number>           Specify number of iterations of projective dynamics per timestep\n";
+                << "\t--size <x> <y>       Cloth mesh size\n"
+                << "\t--mesh <filename>    Tet mesh file to load\n"
+                << "\t-n <number>          Number of iterations of projective dynamics per timestep\n";
             return 1;
         }
 
-        vec2 cloth_resolution = vec2{10, 10}; 
+        std::array<int, 2> cloth_resolution = {10, 10};
         std::string mesh_filename;
         uint32_t n_iterations = 10;
 
         if (arg_flag(argv, argv + argc, "--size")){
-                cloth_resolution = get_arg<vec2>(argv, argv + argc, "--size");
-                std::cout << "Using cloth of size " << cloth_resolution.x << "x"
-                    << cloth_resolution.y << "\n";
+                cloth_resolution = get_arg<int, 2>(argv, argv + argc, "--size");
+                std::cout << "Using cloth of size " << cloth_resolution[0] << "x"
+                    << cloth_resolution[1] << "\n";
         } else if (arg_flag(argv, argv + argc, "--mesh")){
                 mesh_filename = get_arg<std::string>(argv, argv + argc, "--mesh");
         }
@@ -82,7 +88,7 @@ int main(int argc, char **argv){
                 mesh = pd_mesh_surface_mk_from_json(str);
                 free(str);
         } else {
-                mesh = pd_mesh_surface_mk_grid(cloth_resolution.x, cloth_resolution.y);
+                mesh = pd_mesh_surface_mk_grid(cloth_resolution[0], cloth_resolution[1]);
         }
 
         assert(mesh);

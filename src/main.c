@@ -5,6 +5,8 @@
 #include <string.h>
 #include <tgmath.h>
 #include <time.h>
+#include <algorithm>
+#include <array>
 
 #include <epoxy/gl.h>
 #include <imgui/imgui.h>
@@ -268,6 +270,7 @@ realize()
 
         struct PdMeshSurface *mesh;
         if (mesh_filename){
+                printf("Loading mesh %s\n", mesh_filename);
                 char *str = pk_io_read_file(mesh_filename);
                 assert(str);
                 mesh = pd_mesh_surface_mk_from_json(str);
@@ -415,25 +418,70 @@ unrealize()
         glDeleteBuffers(1, &ubo);
 }
 
+struct vec2 {
+    int x, y;
+};
+std::istream& operator>>(std::istream &is, vec2 &v){
+    is >> v.x >> v.y;
+    return is;
+}
+
+bool arg_flag(char **beg, char **end, const std::string &f){
+        return std::find(beg, end, f) != end;
+}
+// We compile this as C++, so no worries :P
+template<typename T>
+T get_arg(char **beg, char **end, const std::string &f){
+        char **it = std::find(beg, end, f);
+        if (it != end && ++it != end){
+                std::stringstream ss;
+                ss << *it;
+                T t;
+                ss >> t;
+                return t;
+        }
+        return T();
+}
+template<typename T, size_t N>
+std::array<T, N> get_arg(char **beg, char **end, const std::string &f){
+        char **it = std::find(beg, end, f);
+        assert(it + 1 != end);
+        ++it;
+        std::array<T, N> arr;
+        for (size_t read = 0; read < N && it != end; ++read, ++it){
+                std::stringstream ss;
+                ss << *it;
+                ss >> arr[read];
+        }
+        return arr;
+}
 
 int
 main(int argc, char **argv)
 {
-        if (argc > 2) {
-                resolution_x = atoi(argv[1]);
-                resolution_y = atoi(argv[2]);
+        if (arg_flag(argv, argv + argc, "-h")){
+            printf("Usage: ./pd_benchmark [options]\n"
+                "\t--size <x> <y>       Cloth mesh size (default 10 10)\n"
+                "\t--mesh <filename>    Tet mesh file to load\n"
+                "\t-n <number>          Number of iterations of projective dynamics per timestep (default 10)\n");
+            return 0;
         }
-        if (argc > 3) {
-                n_iterations = atoi(argv[3]);
+        if (arg_flag(argv, argv + argc, "--size")){
+                std::array<int, 2> cloth_resolution = get_arg<int, 2>(argv, argv + argc, "--size");
+                printf("Using cloth of size %dx%d\n", cloth_resolution[0], cloth_resolution[1]);
+                resolution_x = cloth_resolution[0];
+                resolution_y = cloth_resolution[1];
+        } else if (arg_flag(argv, argv + argc, "--mesh")){
+                mesh_filename = *(std::find(argv, argv + argc, std::string("--mesh")) + 1);
+        }
+        if (arg_flag(argv, argv + argc, "-n")){
+                n_iterations = get_arg<uint32_t>(argv, argv + argc, "-n");
                 if (n_iterations == 0){
                         printf("iteration count must be > 0! Forcing to 1\n");
                         n_iterations = 1;
                 }
                 timestep = 1.0f/(60.0f*n_iterations);
         }
-        /* TODO: res does not make sense to specify above */
-        if (argc > 4)
-                mesh_filename = argv[4];
 
         if (!glfwInit())
                 exit(EXIT_FAILURE);
