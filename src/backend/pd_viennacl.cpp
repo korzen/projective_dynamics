@@ -87,6 +87,8 @@ struct PdSolver {
 #else
         float cg_tolerance;
         int cg_max_iterations;
+        float cg_last_error;
+        int cg_last_iterations;
 #endif
 
         float t2;
@@ -464,8 +466,8 @@ pd_solver_advance(struct PdSolver *solver){
         // default cg uses tolerance 1e-8 and at most 300 iterations
         const viennacl::linalg::cg_tag custom_cg(solver->cg_tolerance, solver->cg_max_iterations);
         solver->positions = viennacl::linalg::solve(solver->a_mat, b, custom_cg);
-        //printf("Number of iterations: %u\n", custom_cg.iters());
-        //printf("Error: %f\n", custom_cg.error());
+        solver->cg_last_iterations = custom_cg.iters();
+        solver->cg_last_error = custom_cg.error();
 #endif
 
 #else
@@ -566,13 +568,13 @@ pd_solver_draw_ui(struct PdSolver *solver)
 {
 #if !USE_CUSPARSE
         if (ImGui::Begin(pd_solver_name(solver))){
-                ImGui::InputFloat("CG Tolerance", &solver->cg_tolerance, 0.0f, 0.0f, -1,
-                        ImGuiInputTextFlags_CharsDecimal);
+                ImGui::InputFloat("CG Tolerance", &solver->cg_tolerance, 0, 0, 8);
 
-                ImGui::InputInt("CG Tolerance", &solver->cg_max_iterations, 1, 100,
-                        ImGuiInputTextFlags_CharsDecimal);
+                ImGui::InputInt("CG Max Iterations", &solver->cg_max_iterations);
                 // Make sure we do at least on CG iteration
                 solver->cg_max_iterations = std::max(solver->cg_max_iterations, 1);
+                ImGui::Text("Last Solve: %d iterations %f error", solver->cg_last_iterations,
+                        solver->cg_last_error);
         }
         ImGui::End();
 #endif
