@@ -1,5 +1,16 @@
 #define USE_CUSTOM_KERNELS 1
-#define USE_PRECONDITIONER 0
+
+/* picks first with 1 set */
+#define PRECONDITIONER_ILUT        0
+#define PRECONDITIONER_AMG         0
+#define PRECONDITIONER_JACOBI      0
+#define PRECONDITIONER_ROW_SCALING 0
+#define PRECONDITIONER_ICHOL0      0
+#define USE_PRECONDITIONER (PRECONDITIONER_ILUT || \
+                            PRECONDITIONER_AMG || \
+                            PRECONDITIONER_JACOBI || \
+                            PRECONDITIONER_ROW_SCALING || \
+                            PRECONDITIONER_ICHOL0)
 
 #include <cassert>
 #include <vector>
@@ -16,7 +27,10 @@
 #include <viennacl/vector.hpp>
 #include <viennacl/matrix.hpp>
 #include <viennacl/compressed_matrix.hpp>
+#include <viennacl/linalg/amg.hpp>
 #include <viennacl/linalg/cg.hpp>
+#include <viennacl/linalg/ichol.hpp>
+#include <viennacl/linalg/jacobi_precond.hpp>
 #include <imgui/imgui.h>
 #include "../pd_time.h"
 #include "../pd_solver.h"
@@ -68,7 +82,17 @@ struct PdSolver {
         viennacl::compressed_matrix<float> j_mat;
         viennacl::compressed_matrix<float> a_mat;
         
-        viennacl::linalg::ilut_precond<viennacl::compressed_matrix<float>> *ilut_mat;
+#if PRECONDITIONER_ILUT
+        viennacl::linalg::ilut_precond<viennacl::compressed_matrix<float>> *precond_mat;
+#elif PRECONDITIONER_AMG
+        viennacl::linalg::amg_precond<viennacl::compressed_matrix<float>> *precond_mat;
+#elif PRECONDITIONER_JACOBI
+        viennacl::linalg::jacobi_precond<viennacl::compressed_matrix<float>> *precond_mat;
+#elif PRECONDITIONER_ROW_SCALING
+        viennacl::linalg::row_scaling<viennacl::compressed_matrix<float>> *precond_mat;
+#elif PRECONDITIONER_ICHOL0
+        viennacl::linalg::ichol0_precond<viennacl::compressed_matrix<float>> *precond_mat;
+#endif
 
         std::vector<PdConstraintAttachment> attachments;
         viennacl::vector<float> attachment_pos;
@@ -248,9 +272,22 @@ pd_solver_alloc(float const                         *positions,
         viennacl::copy(build_sparse_mat, solver->j_mat);
 
         // TODO: preconditioner settings
-#if USE_PRECONDITIONER
+#if PRECONDITIONER_ILUT
         const viennacl::linalg::ilut_tag ilut_conf(100, 1e-10);
-        solver->ilut_mat = new viennacl::linalg::ilut_precond<viennacl::compressed_matrix<float>>(solver->a_mat, ilut_conf);
+        solver->precond_mat = new viennacl::linalg::ilut_precond<viennacl::compressed_matrix<float>>(solver->a_mat, ilut_conf);
+#elif PRECONDITIONER_AMG
+        viennacl::linalg::amg_tag amg_conf;
+        solver->precond_mat = new viennacl::linalg::amg_precond<viennacl::compressed_matrix<float>>(solver->a_mat, amg_conf);
+        solver->precond_mat->setup();
+#elif PRECONDITIONER_JACOBI
+        solver->precond_mat = new viennacl::linalg::jacobi_precond<viennacl::compressed_matrix<float>>(solver->a_mat,
+                                                                                                       viennacl::linalg::jacobi_tag());
+#elif PRECONDITIONER_ROW_SCALING
+        solver->precond_mat = new viennacl::linalg::row_scaling<viennacl::compressed_matrix<float>>(solver->a_mat,
+                                                                                                    viennacl::linalg::row_scaling_tag());
+#elif PRECONDITIONER_ICHOL0
+        solver->precond_mat = new viennacl::linalg::ichol0_precond<viennacl::compressed_matrix<float>>(solver->a_mat,
+                                                                                                       viennacl::linalg::ichol0_tag());
 #endif
 
 #if USE_CUSPARSE
@@ -326,7 +363,7 @@ pd_solver_free(struct PdSolver *solver)
 #endif
 
 #if USE_PRECONDITIONER
-        delete solver->ilut_mat;
+        delete solver->precond_mat;
 #endif
         delete solver;
 }
@@ -458,17 +495,17 @@ pd_solver_advance(struct PdSolver *solver){
         /* GLOBAL STEP */
         struct timespec global_start;
         clock_gettime(CLOCK_MONOTONIC, &global_start);
+        const viennacl::linalg::cg_tag custom_cg(solver->cg_tolerance, solver->cg_max_iterations);
 #if !USE_CUSPARSE
         // Solve the system with ViennaCL's CG solver
 #if USE_PRECONDITIONER
-        solver->positions = viennacl::linalg::solve(solver->a_mat, b, viennacl::linalg::cg_tag(), *solver->ilut_mat);
+        solver->positions = viennacl::linalg::solve(solver->a_mat, b, custom_cg, *solver->precond_mat);
 #else
         // default cg uses tolerance 1e-8 and at most 300 iterations
-        const viennacl::linalg::cg_tag custom_cg(solver->cg_tolerance, solver->cg_max_iterations);
         solver->positions = viennacl::linalg::solve(solver->a_mat, b, custom_cg);
+#endif
         solver->cg_last_iterations = custom_cg.iters();
         solver->cg_last_error = custom_cg.error();
-#endif
 
 #else
 #if !USE_CUSPARSE_LOW_LEVEL
