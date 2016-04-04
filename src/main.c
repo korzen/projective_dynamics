@@ -382,8 +382,8 @@ render_gui()
         ImGuiIO &io = ImGui::GetIO();
         ImGui::Text("Average %.3f ms/frame (%.1f FPS)", 1000.f / io.Framerate, io.Framerate);
         ImGui::Text("Solver: %s", pd_solver_name(solver));
-        ImGui::Text("Local CMA:  %.3fms", pd_solver_local_cma(solver));
-        ImGui::Text("Global CMA: %.3fms", pd_solver_global_cma(solver));
+        ImGui::Text("Local CMA/solve:  %.3fms", pd_solver_local_cma(solver));
+        ImGui::Text("Global CMA/solve: %.3fms", pd_solver_global_cma(solver));
 
         if (ImGui::InputFloat3("gravity vector", gravity.v, -1, ImGuiInputTextFlags_CharsDecimal))
                 pd_solver_set_ext_force(solver, gravity.v);
