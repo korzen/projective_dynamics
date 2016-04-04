@@ -6,11 +6,17 @@
 #define PRECONDITIONER_JACOBI      0
 #define PRECONDITIONER_ROW_SCALING 0
 #define PRECONDITIONER_ICHOL0      0
+#define PRECONDITIONER_CHOW_PATEL  0
+#define PRECONDITIONER_ILU0        0
+#define PRECONDITIONER_BLOCK_ILU   0
 #define USE_PRECONDITIONER (PRECONDITIONER_ILUT || \
                             PRECONDITIONER_AMG || \
                             PRECONDITIONER_JACOBI || \
                             PRECONDITIONER_ROW_SCALING || \
-                            PRECONDITIONER_ICHOL0)
+                            PRECONDITIONER_ICHOL0 || \
+                            PRECONDITIONER_CHOW_PATEL || \
+                            PRECONDITIONER_ILU0 || \
+                            PRECONDITIONER_BLOCK_ILU)
 
 #include <cassert>
 #include <vector>
@@ -92,6 +98,12 @@ struct PdSolver {
         viennacl::linalg::row_scaling<viennacl::compressed_matrix<float>> *precond_mat;
 #elif PRECONDITIONER_ICHOL0
         viennacl::linalg::ichol0_precond<viennacl::compressed_matrix<float>> *precond_mat;
+#elif PRECONDITIONER_CHOW_PATEL
+        viennacl::linalg::chow_patel_ilu_precond<viennacl::compressed_matrix<float>> *precond_mat;
+#elif PRECONDITIONER_ILU0
+        viennacl::linalg::ilu0_precond<viennacl::compressed_matrix<float>> *precond_mat;
+#elif PRECONDITIONER_BLOCK_ILU
+        viennacl::linalg::block_ilu_precond<viennacl::compressed_matrix<float>, viennacl::linalg::ilu0_tag> *precond_mat;
 #endif
 
         std::vector<PdConstraintAttachment> attachments;
@@ -288,7 +300,22 @@ pd_solver_alloc(float const                         *positions,
 #elif PRECONDITIONER_ICHOL0
         solver->precond_mat = new viennacl::linalg::ichol0_precond<viennacl::compressed_matrix<float>>(solver->a_mat,
                                                                                                        viennacl::linalg::ichol0_tag());
+#elif PRECONDITIONER_CHOW_PATEL
+        /* first argument is number of nonlinear sweeps; second is number of Jacobi iterations per triangular "solve" */
+        viennacl::linalg::chow_patel_tag chow_patel_conf(3, 2);
+        solver->precond_mat = new viennacl::linalg::chow_patel_ilu_precond<viennacl::compressed_matrix<float>>(solver->a_mat,
+                                                                                                               chow_patel_conf);
+#elif PRECONDITIONER_ILU0
+        viennacl::linalg::ilu0_tag ilu0_conf;
+        solver->precond_mat = new viennacl::linalg::ilu0_precond<viennacl::compressed_matrix<float>>(solver->a_mat, ilu0_conf);
+#elif PRECONDITIONER_BLOCK_ILU
+        viennacl::linalg::ilu0_tag ilu0_conf;
+        solver->precond_mat = new viennacl::linalg::block_ilu_precond<viennacl::compressed_matrix<float>, viennacl::linalg::ilu0_tag>(solver->a_mat,
+                                                                                                                                      ilu0_conf);
 #endif
+
+        std::cout << "NNZ in A matrix: " << solver->a_mat.nnz() << '\n';
+        std::cout << "Sparsity of A matrix: " << (double)solver->a_mat.nnz()/solver->a_mat.size1()/solver->a_mat.size2() << '\n';
 
 #if USE_CUSPARSE
         std::cout << "Setting up for cuSPARSE solver\n";
