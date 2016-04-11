@@ -1,4 +1,5 @@
 #define USE_CUSTOM_KERNELS 1
+#define USE_INITIAL_GUESS_Y 0
 
 /* picks first with 1 set */
 #define PRECONDITIONER_ILUT        0
@@ -523,16 +524,22 @@ pd_solver_advance(struct PdSolver *solver){
         struct timespec global_start;
         clock_gettime(CLOCK_MONOTONIC, &global_start);
         const viennacl::linalg::cg_tag custom_cg(solver->cg_tolerance, solver->cg_max_iterations);
+        viennacl::linalg::cg_solver<viennacl::vector<float>> custom_solver(custom_cg);
+
+#if USE_INITIAL_GUESS_Y
+        custom_solver.set_initial_guess(y);
+#endif
+
 #if !USE_CUSPARSE
         // Solve the system with ViennaCL's CG solver
 #if USE_PRECONDITIONER
-        solver->positions = viennacl::linalg::solve(solver->a_mat, b, custom_cg, *solver->precond_mat);
+        solver->positions = custom_solver(solver->a_mat, b, *solver->precond_mat);
 #else
         // default cg uses tolerance 1e-8 and at most 300 iterations
-        solver->positions = viennacl::linalg::solve(solver->a_mat, b, custom_cg);
+        solver->positions = custom_solver(solver->a_mat, b);
 #endif
-        solver->cg_last_iterations = custom_cg.iters();
-        solver->cg_last_error = custom_cg.error();
+        solver->cg_last_iterations = custom_solver.tag().iters();
+        solver->cg_last_error = custom_solver.tag().error();
 
 #else
 #if !USE_CUSPARSE_LOW_LEVEL
