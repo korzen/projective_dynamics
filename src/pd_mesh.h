@@ -31,7 +31,7 @@ mk_spring(float const *positions, uint32_t const i0, uint32_t const i1)
 {
         float const *p0 = positions + 3*i0;
         float const *p1 = positions + 3*i1;
-        float const rest_length = sqrt(pow(p1[0] - p0[0], 2) + pow(p1[1] - p0[1], 2) + pow(p1[2] - p0[2], 2));
+        float const rest_length = sqrt(pow(p1[0]/2 - p0[0]/2, 2) + pow(p1[1] - p0[1], 2) + pow(p1[2] - p0[2], 2));
         struct PdConstraintSpring s = { i0, i1, rest_length, };
         return s;
 }

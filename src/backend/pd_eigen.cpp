@@ -70,7 +70,7 @@ pd_solver_alloc(float const                         *positions,
 
 
         /* initialize mass matrix */
-        float const total_mass = 1.0f;
+        float const total_mass = 0.5f;
 
         /* TODO: not sure if bug in Eigen */
         /*solver->mass_mat.diagonal().setConstant(total_mass/n_positions);*/
@@ -82,8 +82,8 @@ pd_solver_alloc(float const                         *positions,
         solver->mass_mat.setFromTriplets(std::begin(triplets), std::end(triplets));
 
 
-        float const stiffness_attachment = 320.0f;
-        float const stiffness_spring     = 320.0f;
+        float const stiffness_attachment = 32.0f;
+        float const stiffness_spring     = 32.0f;
 
 
         /* build L matrix; kAA^T (and Kronecker product to apply it to 3 vector */

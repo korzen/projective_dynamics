@@ -20,6 +20,7 @@ extern "C" {
 
 #include "pd_mesh.h"
 #include "pd_solver.h"
+#include "pd_time.h"
 
 
 enum { EBO_TRIANGLES, EBO_LINES, N_EBOS, };
@@ -344,9 +345,9 @@ realize()
 
 
         for (int i = 0; i < n_solvers; ++i) {
-                mesh->attachments[0].position[0] = i;
-                mesh->attachments[0].position[1] = 1.0f;
-                mesh->attachments[0].position[2] = 0.0f;
+                mesh->attachments[0].position[0] = 2.0*i - 1.0;
+                mesh->attachments[0].position[1] = 0.0f;
+                mesh->attachments[0].position[2] = 1.0f;
 
                 solvers[i] = pd_solver_alloc(mesh->positions, mesh->n_positions,
                                              mesh->attachments, mesh->n_attachments,
@@ -361,6 +362,9 @@ static void
 simulate()
 {
         for (uint32_t i = 0; i < n_iterations; ++i) {
+                struct timespec iters_start;
+                clock_gettime(CLOCK_MONOTONIC, &iters_start);
+
                 #pragma omp parallel for
                 for (int j = 0; j < n_solvers; ++j)
                         pd_solver_advance(solvers[j]);
@@ -381,6 +385,10 @@ simulate()
                                 attachments[0][i].position[j] = pos[1][3*(resolution_x*i - 2) + j];
                                 attachments[1][i].position[j] = pos[0][3*(resolution_x*i - 2) + j];
                         }
+
+                struct timespec iters_end;
+                clock_gettime(CLOCK_MONOTONIC, &iters_end);
+                printf("Iterations time: %f ms\n", pd_time_diff_ms(&iters_start, &iters_end));
         }
 }
 
