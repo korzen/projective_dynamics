@@ -104,19 +104,24 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
                 m->springs[m->n_springs++] = mk_spring(m->positions, (n_y - 1)*n_x + i, (n_y - 1)*n_x + (i + 1));
 
         /* create net */
-        m->n_attachments  = 4;
+        m->n_attachments  = 1 + n_y;
         m->attachments    = (struct PdConstraintAttachment *)malloc(m->n_attachments*sizeof *m->attachments);
+        m->attachments[0] = (struct PdConstraintAttachment){ 0, { m->positions[0], m->positions[1], m->positions[2], }, };
+
+        for (uint32_t i = 1; i <= n_y; ++i)
+                m->attachments[i] = (struct PdConstraintAttachment){ n_x*i - 1, { m->positions[0], m->positions[1], m->positions[2], }, };
 
         /*
         m->attachments[0] = (struct PdConstraintAttachment){ 0, { m->positions[0], m->positions[1], m->positions[2], }, };
         m->attachments[1] = (struct PdConstraintAttachment){ (n_x - 1), { m->positions[3*(n_x - 1)], m->positions[3*(n_x - 1) + 1], m->positions[3*(n_x - 1) + 2], }, };
         */
+        /*
         m->attachments[0] = (struct PdConstraintAttachment){ 0, { -1.0f, -1.0f, 1.0f, }, };
         m->attachments[1] = (struct PdConstraintAttachment){ (n_x - 1), { 1.0f, -1.0f, 1.0f, }, };
 
         m->attachments[2] = (struct PdConstraintAttachment){ (n_y - 1)*n_x, { -1.0f, 1.0f, 1.0f, }, };
         m->attachments[3] = (struct PdConstraintAttachment){ (n_x - 1) + (n_y - 1)*n_x, { 1.0f, 1.0f, 1.0f, }, };
-
+        */
 
         return m;
 }

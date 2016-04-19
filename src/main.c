@@ -41,7 +41,9 @@ static struct MatBlock {
         mat4_t view;
         mat4_t projection;
 } *ubo_mapped;
-static struct PdSolver *solver;
+
+enum { n_solvers = 2, };
+static struct PdSolver *solvers[n_solvers];
 
 static uint32_t n_iterations = 10;
 static float timestep = 1.0f/(60.0f*10);
@@ -341,10 +343,16 @@ realize()
         glBindVertexBuffer(0, vbo, 0, sizeof (GLfloat[3]));
 
 
-        solver = pd_solver_alloc(mesh->positions, mesh->n_positions,
-                                 mesh->attachments, mesh->n_attachments,
-                                 mesh->springs, mesh->n_springs,
-                                 timestep);
+        for (int i = 0; i < n_solvers; ++i) {
+                mesh->attachments[0].position[0] = i;
+                mesh->attachments[0].position[1] = 1.0f;
+                mesh->attachments[0].position[2] = 0.0f;
+
+                solvers[i] = pd_solver_alloc(mesh->positions, mesh->n_positions,
+                                             mesh->attachments, mesh->n_attachments,
+                                             mesh->springs, mesh->n_springs,
+                                             timestep);
+        }
         pd_mesh_surface_free(mesh);
 }
 
@@ -353,7 +361,27 @@ static void
 simulate()
 {
         for (uint32_t i = 0; i < n_iterations; ++i)
-                pd_solver_advance(solver);
+                #pragma omp parallel for
+                for (int j = 0; j < n_solvers; ++j)
+                        pd_solver_advance(solvers[j]);
+
+        /* reset the attachment constraint on shared border */
+        float const *const pos[2] = {
+                pd_solver_map_positions(solvers[0]),
+                pd_solver_map_positions(solvers[1]),
+        };
+
+        struct PdConstraintAttachment *attachments[2] = {
+                pd_solver_map_attachments(solvers[0]),
+                pd_solver_map_attachments(solvers[1]),
+        };
+
+        for (uint32_t i = 1; i <= resolution_y; ++i)
+                for (int j = 0; j < 3; ++j) {
+                        attachments[0][i].position[j] = pos[1][3*(resolution_x*i - 2) + j];
+                        attachments[1][i].position[j] = pos[0][3*(resolution_x*i - 2) + j];
+                }
+        
 }
 
 
@@ -363,14 +391,17 @@ render()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         /* TODO: avoid memcpy by passing pointer to advance solver */
-        memcpy(positions_mapped, pd_solver_map_positions(solver), n_positions*3*sizeof *positions_mapped);
+        for (int i = 0; i < n_solvers; ++i) {
+                memcpy(positions_mapped, pd_solver_map_positions(solvers[i]), n_positions*3*sizeof *positions_mapped);
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_TRIANGLES]);
-        glDrawElements(GL_TRIANGLES, triangles_count, GL_UNSIGNED_INT, NULL);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_TRIANGLES]);
+                glDrawElements(GL_TRIANGLES, triangles_count, GL_UNSIGNED_INT, NULL);
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_LINES]);
-        glDrawElements(GL_LINES, lines_count, GL_UNSIGNED_INT, NULL);
-        glDrawArrays(GL_POINTS, 0, n_positions);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_LINES]);
+                glDrawElements(GL_LINES, lines_count, GL_UNSIGNED_INT, NULL);
+                glDrawArrays(GL_POINTS, 0, n_positions);
+                glFinish();
+        }
 }
 
 
@@ -381,14 +412,15 @@ render_gui()
 
         ImGuiIO &io = ImGui::GetIO();
         ImGui::Text("Average %.3f ms/frame (%.1f FPS)", 1000.f / io.Framerate, io.Framerate);
-        ImGui::Text("Solver: %s", pd_solver_name(solver));
-        ImGui::Text("Local CMA/solve:  %.3fms", pd_solver_local_cma(solver));
-        ImGui::Text("Global CMA/solve: %.3fms", pd_solver_global_cma(solver));
+        ImGui::Text("Solver: %s", pd_solver_name(solvers[0]));
+        ImGui::Text("Local CMA/solve:  %.3fms", pd_solver_local_cma(solvers[0]));
+        ImGui::Text("Global CMA/solve: %.3fms", pd_solver_global_cma(solvers[0]));
 
         if (ImGui::InputFloat3("gravity vector", gravity.v, -1, ImGuiInputTextFlags_CharsDecimal))
-                pd_solver_set_ext_force(solver, gravity.v);
+                for (int i = 0; i < n_solvers; ++i)
+                        pd_solver_set_ext_force(solvers[i], gravity.v);
 
-        pd_solver_draw_ui(solver);
+        pd_solver_draw_ui(solvers[0]);
 
         ImGui::Render();
 }
@@ -409,7 +441,8 @@ resize(GLFWwindow *window, int width, int height)
 static void
 unrealize()
 {
-        pd_solver_free(solver);
+        for (int i = 0; i < n_solvers; ++i)
+                pd_solver_free(solvers[i]);
 
         glDeleteProgram(programs[0]);
         glDeleteProgram(programs[1]);

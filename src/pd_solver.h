@@ -65,6 +65,10 @@ pd_solver_local_time(struct PdSolver const *solver);
 void
 pd_solver_draw_ui(struct PdSolver *solver);
 
+
+struct PdConstraintAttachment *
+pd_solver_map_attachments(struct PdSolver *solver);
+
 #ifdef __cplusplus
 }
 #endif

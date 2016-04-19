@@ -82,8 +82,8 @@ pd_solver_alloc(float const                         *positions,
         solver->mass_mat.setFromTriplets(std::begin(triplets), std::end(triplets));
 
 
-        float const stiffness_attachment = 32.0f;
-        float const stiffness_spring     = 16.0f;
+        float const stiffness_attachment = 320.0f;
+        float const stiffness_spring     = 320.0f;
 
 
         /* build L matrix; kAA^T (and Kronecker product to apply it to 3 vector */
@@ -257,6 +257,12 @@ float const *
 pd_solver_map_positions(struct PdSolver const *solver)
 {
         return solver->positions.data();
+}
+
+struct PdConstraintAttachment *
+pd_solver_map_attachments(struct PdSolver *solver)
+{
+        return solver->attachments;
 }
 
 
