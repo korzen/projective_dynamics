@@ -360,28 +360,28 @@ realize()
 static void
 simulate()
 {
-        for (uint32_t i = 0; i < n_iterations; ++i)
+        for (uint32_t i = 0; i < n_iterations; ++i) {
                 #pragma omp parallel for
                 for (int j = 0; j < n_solvers; ++j)
                         pd_solver_advance(solvers[j]);
 
-        /* reset the attachment constraint on shared border */
-        float const *const pos[2] = {
-                pd_solver_map_positions(solvers[0]),
-                pd_solver_map_positions(solvers[1]),
-        };
+                /* reset the attachment constraint on shared border */
+                float const *const pos[2] = {
+                        pd_solver_map_positions(solvers[0]),
+                        pd_solver_map_positions(solvers[1]),
+                };
 
-        struct PdConstraintAttachment *attachments[2] = {
-                pd_solver_map_attachments(solvers[0]),
-                pd_solver_map_attachments(solvers[1]),
-        };
+                struct PdConstraintAttachment *attachments[2] = {
+                        pd_solver_map_attachments(solvers[0]),
+                        pd_solver_map_attachments(solvers[1]),
+                };
 
-        for (uint32_t i = 1; i <= resolution_y; ++i)
-                for (int j = 0; j < 3; ++j) {
-                        attachments[0][i].position[j] = pos[1][3*(resolution_x*i - 2) + j];
-                        attachments[1][i].position[j] = pos[0][3*(resolution_x*i - 2) + j];
-                }
-        
+                for (uint32_t i = 1; i <= resolution_y; ++i)
+                        for (int j = 0; j < 3; ++j) {
+                                attachments[0][i].position[j] = pos[1][3*(resolution_x*i - 2) + j];
+                                attachments[1][i].position[j] = pos[0][3*(resolution_x*i - 2) + j];
+                        }
+        }
 }
 
 
