@@ -97,6 +97,8 @@ int main(int argc, char **argv){
                 mesh->attachments, mesh->n_attachments, mesh->springs, mesh->n_springs, timestep);
         assert(solver);
 
+        std::cout << "Benchmarking solver " << pd_solver_name(solver) << "\n";
+
         using millis = std::chrono::duration<double, std::milli>;
         pb::Benchmarker<millis> bencher(bench_iters, std::chrono::seconds{bench_seconds});
         // We're also custom timing the local and global steps as well
