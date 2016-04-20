@@ -44,7 +44,7 @@ static struct MatBlock {
 static struct PdSolver *solver;
 
 static uint32_t n_iterations = 10;
-static float timestep = 1.0f/(60.0f*10);
+static float timestep = 1.0f/60.0f;
 static uint32_t resolution_x = 16;
 static uint32_t resolution_y = 16;
 static char *mesh_filename;
@@ -358,8 +358,7 @@ realize()
 static void
 simulate()
 {
-        for (uint32_t i = 0; i < n_iterations; ++i)
-                pd_solver_advance(solver);
+        pd_solver_advance(solver, n_iterations);
 }
 
 
@@ -490,7 +489,7 @@ main(int argc, char **argv)
                         printf("iteration count must be > 0! Forcing to 1\n");
                         n_iterations = 1;
                 }
-                timestep = 1.0f/(60.0f*n_iterations);
+                timestep = 1.0f/60.0f;
         }
 
         if (!glfwInit())
