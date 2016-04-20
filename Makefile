@@ -1,7 +1,7 @@
 CC       ?= gcc
 CXX      ?= g++
-CFLAGS   = -std=c11 -g -I./ -O3 -Wall -Wextra -fstrict-aliasing -march=native
-CXXFLAGS = -std=c++14 -g -I./ -Iext/ -O3 -Wall -Wextra -fopenmp -fstrict-aliasing \
+CFLAGS   = -std=c11 -O3 -I./ -Wall -Wextra -fstrict-aliasing -march=native
+CXXFLAGS = -std=c++14 -O3 -I./ -Iext/ -Wall -Wextra -fopenmp -fstrict-aliasing \
 		   -march=native `pkg-config --cflags epoxy glfw3`
 CUDA     ?= /usr/local/cuda/
 LDFLAGS  = -lm `pkg-config --libs glfw3 epoxy` -l:ext/jsmn/libjsmn.a
@@ -63,7 +63,7 @@ libpd_solver_eigen.so: src/backend/pd_eigen.cpp obj/libimgui.so $(BACKENDF)
 	$(CXX) $(CXXFLAGS) $(EIGEN3) --shared -fPIC $< -o $@
 
 libpd_solver_cuda.so: src/backend/pd_viennacl.cpp obj/libimgui.so $(BACKENDF)
-	nvcc -x cu -arch=compute_52 -code=sm_52 -std=c++11 -O3 $(SOLVER_DEFINES) \
+	nvcc -x cu -std=c++11 -O3 $(SOLVER_DEFINES) \
 		--shared -Xcompiler -fPIC -Iext/ $< -o $@ -L./obj/ -limgui
 
 libpd_solver_opencl.so: src/backend/pd_viennacl.cpp $(BACKENDF)
