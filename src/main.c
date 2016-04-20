@@ -472,7 +472,8 @@ main(int argc, char **argv)
             printf("Usage: ./pd_benchmark [options]\n"
                 "\t--size <x> <y>       Cloth mesh size (default 10 10)\n"
                 "\t--mesh <filename>    Tet mesh file to load\n"
-                "\t-n <number>          Number of iterations of projective dynamics per timestep (default 10)\n");
+                "\t-n <number>          Number of iterations of projective dynamics per timestep (default 10)\n"
+                "\t-t <number>          Time taken in each timestep\n");
             return 0;
         }
         if (arg_flag(argv, argv + argc, "--size")){
@@ -490,6 +491,9 @@ main(int argc, char **argv)
                         n_iterations = 1;
                 }
                 timestep = 1.0f/60.0f;
+        }
+        if (arg_flag(argv, argv + argc, "-t")){
+                timestep = get_arg<float>(argv, argv + argc, "-t");
         }
 
         if (!glfwInit())
