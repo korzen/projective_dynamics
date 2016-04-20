@@ -4,7 +4,7 @@
 /* picks first with 1 set */
 #define PRECONDITIONER_ILUT        0
 #define PRECONDITIONER_AMG         0
-#define PRECONDITIONER_JACOBI      1
+#define PRECONDITIONER_JACOBI      0
 #define PRECONDITIONER_ROW_SCALING 0
 #define PRECONDITIONER_ICHOL0      0
 #define PRECONDITIONER_CHOW_PATEL  0
@@ -486,12 +486,7 @@ pd_solver_set_ext_force(struct PdSolver *solver, const float *force)
 
 
 void
-pd_solver_advance(struct PdSolver *solver){
-        /* LOCAL STEP (we account everything except the global solve */
-        struct timespec local_start;
-        clock_gettime(CLOCK_MONOTONIC, &local_start);
-
-
+pd_solver_advance(struct PdSolver *solver, const uint32_t n_iterations){
         // Compute external forces (gravity)
         std::vector<float> vec_build(solver->positions.size(), 0.0f);
         viennacl::vector<float> ext_force(solver->positions.size());
@@ -508,106 +503,113 @@ pd_solver_advance(struct PdSolver *solver){
                 solver->positions.size() / 3, solver->ext_force);
 #endif
         ext_force = viennacl::linalg::prod(solver->mass_mat, ext_force);
-
-        // Setup the constraints vector
-        size_t const n_constraints = solver->attachments.size() + solver->springs.size();
-        viennacl::vector<float> d(3 * n_constraints);
-#if !defined(VIENNACL_WITH_CUDA) || !USE_CUSTOM_KERNELS
-        vec_build.clear();
-        vec_build.resize(3 * n_constraints, 0);
-        size_t offset = 0;
-        for (const auto &c : solver->attachments){
-                for (size_t j = 0; j < 3; ++j){
-                        vec_build[3 * offset + j] = c.position[j];
-                }
-                ++offset;
-        }
-        // TODO: We really should compute constraints on gpu
-        float const *mapped_pos = pd_solver_map_positions(solver);
-        for (const auto &c : solver->springs){
-                vec3f const pa = vec3f(mapped_pos[3 * c.i[1]], mapped_pos[3 * c.i[1] + 1], mapped_pos[3 * c.i[1] + 2]);
-                vec3f const pb = vec3f(mapped_pos[3 * c.i[0]], mapped_pos[3 * c.i[0] + 1], mapped_pos[3 * c.i[0] + 2]);
-                vec3f const v = (pa - pb).normalized() * c.rest_length;
-                for (size_t j = 0; j < 3; ++j){
-                        vec_build[3 * offset + j] = v[j];
-                }
-                ++offset;
-        }
-        viennacl::copy(vec_build.begin(), vec_build.end(), d.begin());
-#else
-        set_attachment_constraints<<<solver->attachments.size() / 32 + 1, 32>>>(viennacl::cuda_arg(solver->attachment_pos),
-                    viennacl::cuda_arg(d), solver->attachments.size());
-
-        set_spring_constraints<<<solver->springs.size() / 32 + 1, 32>>>(viennacl::cuda_arg(solver->positions),
-                viennacl::cuda_arg(solver->spring_indices), viennacl::cuda_arg(solver->spring_rest_lengths),
-                solver->attachments.size(), viennacl::cuda_arg(d), solver->springs.size());
-#endif
-
-        viennacl::vector<float> y = 2.0f * solver->positions - solver->positions_last;
-        viennacl::vector<float> b = viennacl::linalg::prod(solver->mass_mat, y) + solver->t2
-            * (viennacl::linalg::prod(solver->j_mat, d) + ext_force);
+        const viennacl::vector<float> inertia_y = 2.0f * solver->positions - solver->positions_last;
+        const viennacl::vector<float> mass_y = viennacl::linalg::prod(solver->mass_mat, inertia_y);
 
         solver->positions_last = solver->positions;
 
-        struct timespec local_end;
-        clock_gettime(CLOCK_MONOTONIC, &local_end);
+        for (uint32_t iter = 0; iter < n_iterations; ++iter){
+                /* LOCAL STEP (we account everything except the global solve */
+                struct timespec local_start;
+                clock_gettime(CLOCK_MONOTONIC, &local_start);
 
-        /* GLOBAL STEP */
-        struct timespec global_start;
-        clock_gettime(CLOCK_MONOTONIC, &global_start);
+                // Setup the constraints vector
+                size_t const n_constraints = solver->attachments.size() + solver->springs.size();
+                viennacl::vector<float> d(3 * n_constraints);
+#if !defined(VIENNACL_WITH_CUDA) || !USE_CUSTOM_KERNELS
+                vec_build.clear();
+                vec_build.resize(3 * n_constraints, 0);
+                size_t offset = 0;
+                for (const auto &c : solver->attachments){
+                        for (size_t j = 0; j < 3; ++j){
+                                vec_build[3 * offset + j] = c.position[j];
+                        }
+                        ++offset;
+                }
+                // TODO: We really should compute constraints on gpu
+                float const *mapped_pos = pd_solver_map_positions(solver);
+                for (const auto &c : solver->springs){
+                        vec3f const pa = vec3f(mapped_pos[3 * c.i[1]], mapped_pos[3 * c.i[1] + 1], mapped_pos[3 * c.i[1] + 2]);
+                        vec3f const pb = vec3f(mapped_pos[3 * c.i[0]], mapped_pos[3 * c.i[0] + 1], mapped_pos[3 * c.i[0] + 2]);
+                        vec3f const v = (pa - pb).normalized() * c.rest_length;
+                        for (size_t j = 0; j < 3; ++j){
+                                vec_build[3 * offset + j] = v[j];
+                        }
+                        ++offset;
+                }
+                viennacl::copy(vec_build.begin(), vec_build.end(), d.begin());
+#else
+                set_attachment_constraints<<<solver->attachments.size() / 32 + 1, 32>>>(viennacl::cuda_arg(solver->attachment_pos),
+                            viennacl::cuda_arg(d), solver->attachments.size());
+
+                set_spring_constraints<<<solver->springs.size() / 32 + 1, 32>>>(viennacl::cuda_arg(solver->positions),
+                        viennacl::cuda_arg(solver->spring_indices), viennacl::cuda_arg(solver->spring_rest_lengths),
+                        solver->attachments.size(), viennacl::cuda_arg(d), solver->springs.size());
+#endif
+
+                viennacl::vector<float> b = mass_y + solver->t2 * (viennacl::linalg::prod(solver->j_mat, d) + ext_force);
+
+
+                struct timespec local_end;
+                clock_gettime(CLOCK_MONOTONIC, &local_end);
+
+                /* GLOBAL STEP */
+                struct timespec global_start;
+                clock_gettime(CLOCK_MONOTONIC, &global_start);
 
 #if !USE_CUSPARSE
-        // Solve the system with ViennaCL's CG solver
-        const viennacl::linalg::cg_tag custom_cg(solver->cg_tolerance, solver->cg_max_iterations);
-        viennacl::linalg::cg_solver<viennacl::vector<float>> custom_solver(custom_cg);
+                // Solve the system with ViennaCL's CG solver
+                const viennacl::linalg::cg_tag custom_cg(solver->cg_tolerance, solver->cg_max_iterations);
+                viennacl::linalg::cg_solver<viennacl::vector<float>> custom_solver(custom_cg);
 
 #if USE_INITIAL_GUESS_Y
-        custom_solver.set_initial_guess(y);
+                custom_solver.set_initial_guess(y);
 #endif
 #if USE_PRECONDITIONER
-        solver->positions = custom_solver(solver->a_mat, b, *solver->precond_mat);
+                solver->positions = custom_solver(solver->a_mat, b, *solver->precond_mat);
 #else
-        // default cg uses tolerance 1e-8 and at most 300 iterations
-        solver->positions = custom_solver(solver->a_mat, b);
+                // default cg uses tolerance 1e-8 and at most 300 iterations
+                solver->positions = custom_solver(solver->a_mat, b);
 #endif
-        solver->cg_last_iterations = custom_solver.tag().iters();
-        solver->cg_last_error = custom_solver.tag().error();
+                solver->cg_last_iterations = custom_solver.tag().iters();
+                solver->cg_last_error = custom_solver.tag().error();
 
 #else
 #if !USE_CUSPARSE_LOW_LEVEL
-        // Solve the system with cuSPARSE's higher level API
-        int a_mat_singularity = 0;
-        auto status = cusolverSpScsrlsvchol(solver->cusolver_handle, solver->a_mat.size1(), solver->a_mat.nnz(),
-                solver->cusolver_mat_descr, viennacl::cuda_arg<float>(solver->a_mat.handle()),
-                viennacl::cuda_arg<int>(solver->a_mat.handle1()), viennacl::cuda_arg<int>(solver->a_mat.handle2()),
-                viennacl::cuda_arg(b), 0.0001, 0,
-                viennacl::cuda_arg(solver->positions), &a_mat_singularity);
+                // Solve the system with cuSPARSE's higher level API
+                int a_mat_singularity = 0;
+                auto status = cusolverSpScsrlsvchol(solver->cusolver_handle, solver->a_mat.size1(), solver->a_mat.nnz(),
+                        solver->cusolver_mat_descr, viennacl::cuda_arg<float>(solver->a_mat.handle()),
+                        viennacl::cuda_arg<int>(solver->a_mat.handle1()), viennacl::cuda_arg<int>(solver->a_mat.handle2()),
+                        viennacl::cuda_arg(b), 0.0001, 0,
+                        viennacl::cuda_arg(solver->positions), &a_mat_singularity);
 #else
-        // Solve the system with cuSPARSE's low level API
-        auto status = cusolverSpScsrcholSolve(solver->cusolver_handle, solver->a_mat_size1,
-                viennacl::cuda_arg(b), viennacl::cuda_arg(solver->positions), solver->cusolver_chol_info,
-                solver->cu_workspace);
+                // Solve the system with cuSPARSE's low level API
+                auto status = cusolverSpScsrcholSolve(solver->cusolver_handle, solver->a_mat_size1,
+                        viennacl::cuda_arg(b), viennacl::cuda_arg(solver->positions), solver->cusolver_chol_info,
+                        solver->cu_workspace);
 #endif
-        // Wait for cuda solve to be done
-        cudaDeviceSynchronize();
-        if (status != CUSOLVER_STATUS_SUCCESS){
-                std::cout << "cuda error solving the global system\n";
-        }
+                // Wait for cuda solve to be done
+                cudaDeviceSynchronize();
+                if (status != CUSOLVER_STATUS_SUCCESS){
+                        std::cout << "cuda error solving the global system\n";
+                }
 #endif
-        struct timespec global_end;
-        clock_gettime(CLOCK_MONOTONIC, &global_end);
+                struct timespec global_end;
+                clock_gettime(CLOCK_MONOTONIC, &global_end);
 
-        solver->global_time = pd_time_diff_ms(&global_start, &global_end);
-        solver->local_time = pd_time_diff_ms(&local_start, &local_end);
+                solver->global_time = pd_time_diff_ms(&global_start, &global_end);
+                solver->local_time = pd_time_diff_ms(&local_start, &local_end);
 
-        solver->global_cma = (solver->global_time + solver->n_iters*solver->global_cma)/(solver->n_iters + 1);
-        solver->local_cma = (solver->local_time + solver->n_iters*solver->local_cma)/(solver->n_iters + 1);
+                solver->global_cma = (solver->global_time + solver->n_iters*solver->global_cma)/(solver->n_iters + 1);
+                solver->local_cma = (solver->local_time + solver->n_iters*solver->local_cma)/(solver->n_iters + 1);
 
-        if (solver->n_iters && !(solver->n_iters % 500)) {
-                printf("Local CMA: %f ms\n", solver->local_cma);
-                printf("Global CMA: %f ms\n\n", solver->global_cma);
+                if (solver->n_iters && !(solver->n_iters % 500)) {
+                        printf("Local CMA: %f ms\n", solver->local_cma);
+                        printf("Global CMA: %f ms\n\n", solver->global_cma);
+                }
+                ++solver->n_iters;
         }
-        ++solver->n_iters;
 }
 
 float const *
