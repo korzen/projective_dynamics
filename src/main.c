@@ -27,8 +27,8 @@ enum { EBO_TRIANGLES, EBO_LINES, N_EBOS, };
 
 static GLuint  ebos[N_EBOS];
 static GLsizei lines_count;
-static GLuint  pipeline;
-static GLuint  programs[2];
+static GLuint  pipelines[2];
+static GLuint  programs[3];
 static GLsizei triangles_count;
 static GLuint  ubo;
 static GLuint  vao;
@@ -266,10 +266,17 @@ realize()
             printf("Program Failed to Compile or Link:\n%s\n--------", info_log);
         }
 
-        glCreateProgramPipelines(1, &pipeline);
-        glBindProgramPipeline(pipeline);
-        glUseProgramStages(pipeline, GL_VERTEX_SHADER_BIT, programs[0]);
-        glUseProgramStages(pipeline, GL_FRAGMENT_SHADER_BIT, programs[1]);
+        str = pk_io_read_file("data/lines_fs.glsl");
+        programs[2] = glCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &str);
+
+        glCreateProgramPipelines(2, pipelines);
+
+        glUseProgramStages(pipelines[0], GL_VERTEX_SHADER_BIT, programs[0]);
+        glUseProgramStages(pipelines[0], GL_FRAGMENT_SHADER_BIT, programs[1]);
+
+        glUseProgramStages(pipelines[1], GL_VERTEX_SHADER_BIT, programs[0]);
+        glUseProgramStages(pipelines[1], GL_FRAGMENT_SHADER_BIT, programs[2]);
+
 
         struct PdMeshSurface *mesh;
         if (mesh_filename){
@@ -396,15 +403,24 @@ simulate()
 static void
 render()
 {
+        static float const colors[2][4] = {
+                { 1.0f, 0.0f, 0.0f, 1.0f, },
+                { 0.0f, 1.0f, 0.0f, 1.0f, },
+        };
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         /* TODO: avoid memcpy by passing pointer to advance solver */
         for (int i = 0; i < n_solvers; ++i) {
                 memcpy(positions_mapped, pd_solver_map_positions(solvers[i]), n_positions*3*sizeof *positions_mapped);
 
+                glProgramUniform4fv(programs[1], 0, 1, colors[i]);
+
+                glBindProgramPipeline(pipelines[0]);
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_TRIANGLES]);
                 glDrawElements(GL_TRIANGLES, triangles_count, GL_UNSIGNED_INT, NULL);
 
+                glBindProgramPipeline(pipelines[1]);
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_LINES]);
                 glDrawElements(GL_LINES, lines_count, GL_UNSIGNED_INT, NULL);
                 glDrawArrays(GL_POINTS, 0, n_positions);
@@ -454,7 +470,8 @@ unrealize()
 
         glDeleteProgram(programs[0]);
         glDeleteProgram(programs[1]);
-        glDeleteProgramPipelines(1, &pipeline);
+        glDeleteProgram(programs[2]);
+        glDeleteProgramPipelines(2, pipelines);
         glDeleteVertexArrays(1, &vao);
         glDeleteBuffers(2, ebos);
         glDeleteBuffers(1, &vbo);
