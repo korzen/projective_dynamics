@@ -43,7 +43,7 @@ static struct MatBlock {
         mat4_t projection;
 } *ubo_mapped;
 
-enum { n_solvers = 2, };
+enum { n_solvers = 3, };
 static struct PdSolver *solvers[n_solvers];
 
 static uint32_t n_iterations = 10;
@@ -357,7 +357,7 @@ realize()
                 mesh->attachments[0].position[2] = 1.0f;
 
                 solvers[i] = pd_solver_alloc(mesh->positions, mesh->n_positions,
-                                             mesh->attachments, mesh->n_attachments,
+                                             mesh->attachments, (i == 2) ? 0 : 1,
                                              mesh->springs, mesh->n_springs,
                                              timestep);
         }
@@ -368,29 +368,33 @@ realize()
 static void
 simulate()
 {
-        for (uint32_t i = 0; i < n_iterations; ++i) {
+        for (uint32_t iter = 0; iter < n_iterations; ++iter) {
                 struct timespec iters_start;
                 clock_gettime(CLOCK_MONOTONIC, &iters_start);
 
                 #pragma omp parallel for
-                for (int j = 0; j < n_solvers; ++j)
+                for (int j = 0; j < 2; ++j)
                         pd_solver_advance(solvers[j]);
 
-                /* reset the attachment constraint on shared border */
-                float const *const pos[2] = {
-                        pd_solver_map_positions(solvers[0]),
-                        pd_solver_map_positions(solvers[1]),
+                /* set positions for the glue piece */
+                float *pos[2] = {
+                        (float *)pd_solver_map_positions(solvers[0]),
+                        (float *)pd_solver_map_positions(solvers[1]),
                 };
 
-                struct PdConstraintAttachment *attachments[2] = {
-                        pd_solver_map_attachments(solvers[0]),
-                        pd_solver_map_attachments(solvers[1]),
-                };
-
-                for (uint32_t i = 1; i <= resolution_y; ++i)
+                float *pos_glue = (float *)pd_solver_map_positions(solvers[2]);
+                for (uint32_t i = 0; i < resolution_y; ++i)
                         for (int j = 0; j < 3; ++j) {
-                                attachments[0][i].position[j] = pos[1][3*(resolution_x*i - 2) + j];
-                                attachments[1][i].position[j] = pos[0][3*(resolution_x*i - 2) + j];
+                                pos_glue[3*i*resolution_x + j] = pos[0][3*((i + 1)*resolution_x - 1) + j];
+                                pos_glue[3*((i + 1)*resolution_x - 1) + j] = pos[1][3*((i + 1)*resolution_x - 1) + j];
+                        }
+                pd_solver_advance(solvers[2]);
+
+                /* update 2 cloths */
+                for (uint32_t i = 0; i < resolution_y; ++i)
+                        for (int j = 0; j < 3; ++j) {
+                                pos[0][3*((i + 1)*resolution_x - 1) + j] = pos_glue[3*i*resolution_x + j];
+                                pos[1][3*((i + 1)*resolution_x - 1) + j] = pos_glue[3*((i + 1)*resolution_x - 1) + j];
                         }
 
                 struct timespec iters_end;
@@ -403,9 +407,10 @@ simulate()
 static void
 render()
 {
-        static float const colors[2][4] = {
+        static float const colors[3][4] = {
                 { 1.0f, 0.0f, 0.0f, 1.0f, },
                 { 0.0f, 1.0f, 0.0f, 1.0f, },
+                { 0.0f, 0.0f, 1.0f, 1.0f, },
         };
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
