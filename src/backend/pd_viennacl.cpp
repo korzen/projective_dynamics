@@ -4,7 +4,7 @@
 /* picks first with 1 set */
 #define PRECONDITIONER_ILUT        0
 #define PRECONDITIONER_AMG         0
-#define PRECONDITIONER_JACOBI      0
+#define PRECONDITIONER_JACOBI      1
 #define PRECONDITIONER_ROW_SCALING 0
 #define PRECONDITIONER_ICHOL0      0
 #define PRECONDITIONER_CHOW_PATEL  0
@@ -143,6 +143,8 @@ struct PdSolver {
         double   local_cma;
         double   global_cma;
         uint64_t n_iters;
+
+        std::string name;
 };
 
 /* all arrays are copied */
@@ -162,7 +164,7 @@ pd_solver_alloc(float const                         *positions,
         solver->t2 = timestep * timestep;
         solver->ext_force = vec3f(0.0f, 0.0f, -9.83f);
 #if !USE_CUSPARSE
-        solver->cg_tolerance = 1e-8;
+        solver->cg_tolerance = 1e-5;
         solver->cg_max_iterations = 300;
 #endif
 
@@ -284,35 +286,63 @@ pd_solver_alloc(float const                         *positions,
         solver->j_mat = viennacl::compressed_matrix<float>(3 * n_positions, 3 * offset);
         viennacl::copy(build_sparse_mat, solver->j_mat);
 
+#if !USE_CUSPARSE
+
+#ifdef VIENNACL_WITH_CUDA
+        solver->name = "ViennaCL with CUDA";
+#elif defined(VIENNACL_WITH_OPENCL)
+        solver->name = "ViennaCL with OpenCL";
+#else
+        solver->name = "ViennaCL";
+#endif
+
+#else
+
+#if !USE_CUSPARSE_LOW_LEVEL
+        solver->name = "cuSPARSE High Level API";
+#else
+        solver->name = "cuSPARSE Low Level API";
+#endif
+
+#endif
+
         // TODO: preconditioner settings
 #if PRECONDITIONER_ILUT
         const viennacl::linalg::ilut_tag ilut_conf(100, 1e-10);
         solver->precond_mat = new viennacl::linalg::ilut_precond<viennacl::compressed_matrix<float>>(solver->a_mat, ilut_conf);
+        solver->name += " precond ILUT";
 #elif PRECONDITIONER_AMG
         viennacl::linalg::amg_tag amg_conf;
         solver->precond_mat = new viennacl::linalg::amg_precond<viennacl::compressed_matrix<float>>(solver->a_mat, amg_conf);
         solver->precond_mat->setup();
+        solver->name += " precond AMG";
 #elif PRECONDITIONER_JACOBI
         solver->precond_mat = new viennacl::linalg::jacobi_precond<viennacl::compressed_matrix<float>>(solver->a_mat,
                                                                                                        viennacl::linalg::jacobi_tag());
+        solver->name += " precond Jacobi";
 #elif PRECONDITIONER_ROW_SCALING
         solver->precond_mat = new viennacl::linalg::row_scaling<viennacl::compressed_matrix<float>>(solver->a_mat,
                                                                                                     viennacl::linalg::row_scaling_tag());
+        solver->name += " precond Row Scaling";
 #elif PRECONDITIONER_ICHOL0
         solver->precond_mat = new viennacl::linalg::ichol0_precond<viennacl::compressed_matrix<float>>(solver->a_mat,
                                                                                                        viennacl::linalg::ichol0_tag());
+        solver->name += " precond ICHOL0";
 #elif PRECONDITIONER_CHOW_PATEL
         /* first argument is number of nonlinear sweeps; second is number of Jacobi iterations per triangular "solve" */
         viennacl::linalg::chow_patel_tag chow_patel_conf(3, 2);
         solver->precond_mat = new viennacl::linalg::chow_patel_ilu_precond<viennacl::compressed_matrix<float>>(solver->a_mat,
                                                                                                                chow_patel_conf);
+        solver->name += " precond Chow Patel";
 #elif PRECONDITIONER_ILU0
         viennacl::linalg::ilu0_tag ilu0_conf;
         solver->precond_mat = new viennacl::linalg::ilu0_precond<viennacl::compressed_matrix<float>>(solver->a_mat, ilu0_conf);
+        solver->name += " precond ILU0";
 #elif PRECONDITIONER_BLOCK_ILU
         viennacl::linalg::ilu0_tag ilu0_conf;
         solver->precond_mat = new viennacl::linalg::block_ilu_precond<viennacl::compressed_matrix<float>, viennacl::linalg::ilu0_tag>(solver->a_mat,
                                                                                                                                       ilu0_conf);
+        solver->name += " precond Block ILU";
 #endif
 
         std::cout << "NNZ in A matrix: " << solver->a_mat.nnz() << '\n';
@@ -600,25 +630,7 @@ pd_solver_local_cma(const struct PdSolver *solver){
 char const *
 pd_solver_name(struct PdSolver const *solver)
 {
-#if !USE_CUSPARSE
-
-#ifdef VIENNACL_WITH_CUDA
-        return "ViennaCL with CUDA";
-#elif defined(VIENNACL_WITH_OPENCL)
-        return "ViennaCL with OpenCL";
-#else
-        return "ViennaCL";
-#endif
-
-#else
-
-#if !USE_CUSPARSE_LOW_LEVEL
-        return "cuSPARSE High Level API";
-#else
-        return "cuSPARSE Low Level API";
-#endif
-
-#endif
+        return solver->name.c_str();
 }
 
 double
@@ -638,7 +650,8 @@ void
 pd_solver_draw_ui(struct PdSolver *solver)
 {
 #if !USE_CUSPARSE
-        if (ImGui::Begin(pd_solver_name(solver))){
+        if (ImGui::Begin("GPU Solver")){
+                ImGui::Text("Solver: %s", pd_solver_name(solver));
                 ImGui::InputFloat("CG Tolerance", &solver->cg_tolerance, 0, 0, 8);
 
                 ImGui::InputInt("CG Max Iterations", &solver->cg_max_iterations);
