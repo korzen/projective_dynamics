@@ -23,9 +23,6 @@ else ifeq ($(BACKEND), cusparse_low)
 	PD_SO_NAME=libpd_solver_cuda.so
 	SOLVER_DEFINES=-DVIENNACL_WITH_CUDA -DUSE_CUSPARSE=1 -DUSE_CUSPARSE_LOW_LEVEL=1
 	CUDA_LIBS=-L$(CUDA)/lib64/ -lcudart -lcusolver -lcusparse
-else ifeq ($(BACKEND), opencl)
-	LIBPD_SOLVER=pd_solver_opencl
-	PD_SO_NAME=libpd_solver_opencl.so
 else
 	BACKEND=eigen
 	LIBPD_SOLVER=pd_solver_eigen
@@ -68,9 +65,6 @@ libpd_solver_eigen.so: src/backend/pd_eigen.cpp obj/libimgui.so $(BACKENDF)
 libpd_solver_cuda.so: src/backend/pd_viennacl.cpp obj/libimgui.so $(BACKENDF)
 	nvcc -x cu -std=c++11 -O3 $(SOLVER_DEFINES) \
 		--shared -Xcompiler -fPIC -Iext/ $< -o $@ -L./obj/ -limgui
-
-libpd_solver_opencl.so: src/backend/pd_viennacl.cpp $(BACKENDF)
-	$(CXX) $(CXXFLAGS) $(EIGEN3) --shared -fPIC -DVIENNACL_WITH_OPENCL $< -o $@
 
 build_jsmn:
 	cd ext/jsmn && $(MAKE) -f Makefile
