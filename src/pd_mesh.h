@@ -104,7 +104,7 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
                 m->springs[m->n_springs++] = mk_spring(m->positions, (n_y - 1)*n_x + i, (n_y - 1)*n_x + (i + 1));
 
         /* create net */
-        m->n_attachments  = 4;
+        m->n_attachments  = 2;
         m->attachments    = (struct PdConstraintAttachment *)malloc(m->n_attachments*sizeof *m->attachments);
 
         /*
@@ -112,10 +112,10 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
         m->attachments[1] = (struct PdConstraintAttachment){ (n_x - 1), { m->positions[3*(n_x - 1)], m->positions[3*(n_x - 1) + 1], m->positions[3*(n_x - 1) + 2], }, };
         */
         m->attachments[0] = (struct PdConstraintAttachment){ 0, { -1.0f, -1.0f, 1.0f, }, };
-        m->attachments[1] = (struct PdConstraintAttachment){ (n_x - 1), { 1.0f, -1.0f, 1.0f, }, };
+        m->attachments[1] = (struct PdConstraintAttachment){ (n_x - 5), { 1.0f, -1.0f, 1.0f, }, };
 
-        m->attachments[2] = (struct PdConstraintAttachment){ (n_y - 1)*n_x, { -1.0f, 1.0f, 1.0f, }, };
-        m->attachments[3] = (struct PdConstraintAttachment){ (n_x - 1) + (n_y - 1)*n_x, { 1.0f, 1.0f, 1.0f, }, };
+        //m->attachments[2] = (struct PdConstraintAttachment){ (n_y - 1)*n_x, { -1.0f, 1.0f, 1.0f, }, };
+        //m->attachments[3] = (struct PdConstraintAttachment){ (n_x - 1) + (n_y - 1)*n_x, { 1.0f, 1.0f, 1.0f, }, };
 
 
         return m;
@@ -171,7 +171,7 @@ pd_mesh_surface_mk_from_json(char const *json)
         jsmn_parser parser;
         jsmn_init(&parser);
 
-        size_t const n_tokens = 1 << 20;
+        size_t const n_tokens = 1 << 24;
         jsmntok_t *t = (jsmntok_t *)malloc(n_tokens*sizeof *t);
         int const r = jsmn_parse(&parser, json, strlen(json), t, n_tokens);
         if (r < 0) {
@@ -226,6 +226,162 @@ pd_mesh_surface_mk_from_json(char const *json)
         return m;
 }
 
+/* Binary mesh file format:
+ * uint32_t: # of attachments
+ * uint32_t: # of indices
+ * uint32_t: # of springs
+ * uint32_t: # of vertices
+ * [attachments...]: each attachment should be:
+ *      int32_t: index of the attachment
+ *      [f32, f32, f32]: position that is attached too
+ * [indices...]: indices for each triangle, each should be:
+ *      [int32_t, int32_t, int32_t]: first, second, third vert for each tri
+ * [springs...]: spring attachments, each should be:
+ *      [int32_t, int32_t]: indices of the attached vertices
+ *      f32: rest length of the spring
+ * [vertices...]: vertex positions, each should be:
+ *      [f32, f32, f32]: x, y, z coordinates of the vertex
+ */
+struct PdMeshSurface *
+pd_mesh_surface_mk_from_binary(char const *fname){
+        FILE *fp = fopen(fname, "r");
+        if (!fp){
+                printf("Failed to open file %s\n", fname);
+                return NULL;
+        }
+        struct PdMeshSurface *m = (struct PdMeshSurface *)malloc(sizeof *m);
+        m->n_attachments = 0;
+        m->n_indices     = 0;
+        m->n_springs     = 0;
+        m->n_positions   = 0;
+        // Read counts of the various mesh components
+        if (fread(&m->n_attachments, sizeof(uint32_t), 1, fp) != 1){
+                printf("Failed to read # of attachments\n");
+                free(m);
+                fclose(fp);
+                return NULL;
+        }
+        printf("read n_attachments = %u\n", m->n_attachments);
+        if (fread(&m->n_indices, sizeof(uint32_t), 1, fp) != 1){
+                printf("Failed to read # of indices\n");
+                free(m);
+                fclose(fp);
+                return NULL;
+        }
+        if (fread(&m->n_springs, sizeof(uint32_t), 1, fp) != 1){
+                printf("Failed to read # of springs\n");
+                free(m);
+                fclose(fp);
+                return NULL;
+        }
+        if (fread(&m->n_positions, sizeof(uint32_t), 1, fp) != 1){
+                printf("Failed to read # of vertices\n");
+                free(m);
+                fclose(fp);
+                return NULL;
+        }
+        // Read the attachments
+        m->attachments = (struct PdConstraintAttachment *)malloc(m->n_attachments*sizeof *m->attachments);
+        if (fread(m->attachments, sizeof(sizeof *m->attachments), m->n_attachments, fp) != m->n_attachments){
+                printf("Failed to read attachments\n");
+                free(m->attachments);
+                free(m);
+                fclose(fp);
+                return NULL;
+        }
+        // Read the indices
+        m->indices = (uint32_t *)malloc(m->n_indices*sizeof *m->indices);
+        if (fread(m->indices, sizeof(uint32_t), m->n_indices, fp) != m->n_indices){
+                printf("Failed to read indices\n");
+                free(m->indices);
+                free(m->attachments);
+                free(m);
+                fclose(fp);
+                return NULL;
+        }
+        // Read the springs
+        m->springs = (struct PdConstraintSpring *)malloc(m->n_springs*sizeof *m->springs);
+        if (fread(m->springs, sizeof *m->springs, m->n_springs, fp) != m->n_springs){
+                printf("Failed to read springs\n");
+                free(m->springs);
+                free(m->indices);
+                free(m->attachments);
+                free(m);
+                fclose(fp);
+                return NULL;
+        }
+        // Read the vertices
+        m->positions = (float *)malloc(3*m->n_positions*sizeof *m->positions);
+        if (fread(m->positions, sizeof(float), 3 * m->n_positions, fp) != 3 * m->n_positions){
+                printf("Failed to read positions\n");
+                free(m->positions);
+                free(m->springs);
+                free(m->indices);
+                free(m->attachments);
+                free(m);
+                fclose(fp);
+                return NULL;
+        }
+        fclose(fp);
+        return m;
+}
+
+// Write the mesh to the file in our binary format, returns 1 if success and 0 if failure
+int
+pd_mesh_surface_write_binary(struct PdMeshSurface const *m, char const *fname){
+        FILE *fp = fopen(fname, "w");
+        if (!fp){
+                printf("Failed to open file %s\n", fname);
+                return 0;
+        }
+        // Write counts of the various mesh components
+        if (fwrite(&m->n_attachments, sizeof(uint32_t), 1, fp) != 1){
+                printf("Failed to write # of attachments\n");
+                fclose(fp);
+                return 0;
+        }
+        if (fwrite(&m->n_indices, sizeof(uint32_t), 1, fp) != 1){
+                printf("Failed to write # of indices\n");
+                fclose(fp);
+                return 0;
+        }
+        if (fwrite(&m->n_springs, sizeof(uint32_t), 1, fp) != 1){
+                printf("Failed to write # of springs\n");
+                fclose(fp);
+                return 0;
+        }
+        if (fwrite(&m->n_positions, sizeof(uint32_t), 1, fp) != 1){
+                printf("Failed to write # of vertices\n");
+                fclose(fp);
+                return 0;
+        }
+        // write the attachments
+        if (fwrite(m->attachments, sizeof(sizeof *m->attachments), m->n_attachments, fp) != m->n_attachments){
+                printf("Failed to write attachments\n");
+                fclose(fp);
+                return 0;
+        }
+        // write the indices, note: we have 3 ints per index
+        if (fwrite(m->indices, sizeof(uint32_t), m->n_indices, fp) != m->n_indices){
+                printf("Failed to write indices\n");
+                fclose(fp);
+                return 0;
+        }
+        // write the springs
+        if (fwrite(m->springs, sizeof *m->springs, m->n_springs, fp) != m->n_springs){
+                printf("Failed to write springs\n");
+                fclose(fp);
+                return 0;
+        }
+        // write the vertices
+        if (fwrite(m->positions, sizeof(float), 3 * m->n_positions, fp) != 3 * m->n_positions){
+                printf("Failed to write positions\n");
+                fclose(fp);
+                return 0;
+        }
+        fclose(fp);
+        return 1;
+}
 
 void
 pd_mesh_print_info(struct PdMeshSurface const *m)

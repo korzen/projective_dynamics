@@ -17,3 +17,5 @@ pd
 imgui.ini
 active_backend.txt
 pd_benchmark
+pd_mesh_binary
+*.bmesh

@@ -37,7 +37,7 @@ ifneq ($(BACKEND), $(shell test -f $(BACKENDF) && cat $(BACKENDF) || echo "$(BAC
 	UPDATE_BACKEND=$(file > $(BACKENDF),$(BACKEND))
 endif
 
-all: $(UPDATE_BACKEND) build_dir build_jsmn pd pd_benchmark
+all: $(UPDATE_BACKEND) build_dir build_jsmn pd pd_benchmark pd_mesh_binary
 
 pd: obj/pd_io.o obj/pd_linalg.o obj/main.o obj/libimgui.so $(PD_SO_NAME) $(BACKENDF)
 	$(CXX) $(CXXFLAGS) obj/pd_io.o obj/pd_linalg.o obj/main.o -o pd $(LDFLAGS) \
@@ -46,6 +46,9 @@ pd: obj/pd_io.o obj/pd_linalg.o obj/main.o obj/libimgui.so $(PD_SO_NAME) $(BACKE
 pd_benchmark: obj/benchmark.o obj/pd_io.o obj/pd_linalg.o $(PD_SO_NAME) $(BACKENDF)
 	$(CXX) $(CXXFLAGS) obj/pd_io.o obj/pd_linalg.o obj/benchmark.o -o $@ $(LDFLAGS) \
 		-Wl,-rpath,./obj -L./obj/ -l imgui -L. -l $(LIBPD_SOLVER) $(CUDA_LIBS)
+
+pd_mesh_binary: obj/mesh_binary.o obj/pd_io.o
+	$(CXX) $(CXXFLAGS) $^ -o $@ -L./ext/jsmn -ljsmn
 
 obj/libimgui.so: obj/imgui/imgui_impl_glfw_gl3.o obj/imgui/imgui.o obj/imgui/imgui_draw.o
 	$(CXX) $(CXXFLAGS) -shared -o $@ $^

@@ -271,10 +271,16 @@ realize()
         struct PdMeshSurface *mesh;
         if (mesh_filename){
                 printf("Loading mesh %s\n", mesh_filename);
-                char *str = pk_io_read_file(mesh_filename);
-                assert(str);
-                mesh = pd_mesh_surface_mk_from_json(str);
-                free(str);
+                size_t len = strlen(mesh_filename);
+                if (mesh_filename[len - 5] == 'b'){
+                        printf("mesh is binary\n");
+                        mesh = pd_mesh_surface_mk_from_binary(mesh_filename);
+                } else {
+                        char *str = pk_io_read_file(mesh_filename);
+                        assert(str);
+                        mesh = pd_mesh_surface_mk_from_json(str);
+                        free(str);
+                }
         } else
                 mesh = pd_mesh_surface_mk_grid(resolution_x, resolution_y);
 
@@ -368,9 +374,11 @@ render()
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_TRIANGLES]);
         glDrawElements(GL_TRIANGLES, triangles_count, GL_UNSIGNED_INT, NULL);
 
+        /*
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebos[EBO_LINES]);
         glDrawElements(GL_LINES, lines_count, GL_UNSIGNED_INT, NULL);
         glDrawArrays(GL_POINTS, 0, n_positions);
+        */
 }
 
 
