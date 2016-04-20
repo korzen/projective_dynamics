@@ -191,6 +191,7 @@ pd_solver_advance(struct PdSolver *solver)
 
         /* set external force */
         Eigen::VectorXf ext_accel = Eigen::VectorXf::Zero(solver->positions.size());
+#pragma omp parallel for
         for (uint32_t i = 0; i < solver->positions.size()/3; ++i)
                 for (int j = 0; j < 3; ++j)
                         ext_accel[3*i + j] = solver->ext_force[j];
@@ -201,18 +202,20 @@ pd_solver_advance(struct PdSolver *solver)
         /* MUST GO IN THIS ORDER */
         uint32_t const n_constraints = solver->n_attachments + solver->n_springs;
         Eigen::VectorXf d(3*n_constraints);
-        uint32_t offset = 0;
-        for (uint32_t i = 0; i < solver->n_attachments; ++i, ++offset) {
+#pragma omp parallel for
+        for (uint32_t i = 0; i < solver->n_attachments; ++i){
                 /* TODO: constness */
                 struct PdConstraintAttachment c = solver->attachments[i];
-                d.block<3, 1>(3*offset, 0) = Eigen::Map<Eigen::Vector3f>(c.position);
+                d.block<3, 1>(3*i, 0) = Eigen::Map<Eigen::Vector3f>(c.position);
         }
+        const uint32_t offset = solver->n_attachments;
 
-        for (uint32_t i = 0; i < solver->n_springs; ++i, ++offset) {
+#pragma omp parallel for
+        for (uint32_t i = 0; i < solver->n_springs; ++i){
                 struct PdConstraintSpring const c = solver->springs[i];
                 /* TODO: why swapping indices tamed the crazy net? */
                 Eigen::Vector3f const v = solver->positions.block<3, 1>(3*c.i[1], 0) - solver->positions.block<3, 1>(3*c.i[0], 0);
-                d.block<3, 1>(3*offset, 0) = v.normalized()*c.rest_length;
+                d.block<3, 1>(3*(offset + i), 0) = v.normalized()*c.rest_length;
         }
 
 
