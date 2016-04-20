@@ -1,10 +1,7 @@
-#define USE_CUSTOM_KERNELS 1
-#define USE_INITIAL_GUESS_Y 0
-
 /* picks first with 1 set */
 #define PRECONDITIONER_ILUT        0
 #define PRECONDITIONER_AMG         0
-#define PRECONDITIONER_JACOBI      0
+#define PRECONDITIONER_JACOBI      1
 #define PRECONDITIONER_ROW_SCALING 0
 #define PRECONDITIONER_ICHOL0      0
 #define PRECONDITIONER_CHOW_PATEL  0
@@ -164,7 +161,7 @@ pd_solver_alloc(float const                         *positions,
         solver->t2 = timestep * timestep;
         solver->ext_force = vec3f(0.0f, 0.0f, -9.83f);
 #if !USE_CUSPARSE
-        solver->cg_tolerance = 1e-6;
+        solver->cg_tolerance = 1e-5;
         solver->cg_max_iterations = 300;
 #endif
 
@@ -428,7 +425,6 @@ pd_solver_free(struct PdSolver *solver)
         delete solver;
 }
 
-#if defined(VIENNACL_WITH_CUDA) && USE_CUSTOM_KERNELS
 // Kernel to set up the external acceleration vector
 __global__ void set_external_acceleration(float *out, const int size, const vec3f ext_force){
         const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -475,9 +471,6 @@ __global__ void set_spring_constraints(const float * __restrict__ positions, con
         }
 }
 
-#endif
-
-
 void
 pd_solver_set_ext_force(struct PdSolver *solver, const float *force)
 {
@@ -488,23 +481,19 @@ pd_solver_set_ext_force(struct PdSolver *solver, const float *force)
 void
 pd_solver_advance(struct PdSolver *solver, const uint32_t n_iterations){
         // Compute external forces (gravity)
-        std::vector<float> vec_build(solver->positions.size(), 0.0f);
         viennacl::vector<float> ext_force(solver->positions.size());
-#if !defined(VIENNACL_WITH_CUDA) || !USE_CUSTOM_KERNELS
-        // TODO: For OpenCL we need to also write these init kernels
-        for (size_t i = 0; i < solver->positions.size() / 3; ++i){
-                vec_build[3 * i] = solver->ext_force.x;
-                vec_build[3 * i + 1] = solver->ext_force.y;
-                vec_build[3 * i + 2] = solver->ext_force.z;
-        }
-        viennacl::copy(vec_build.begin(), vec_build.end(), ext_force.begin());
-#else
-        set_external_acceleration<<<(solver->positions.size() / 3) / 32 + 1, 32>>>(viennacl::cuda_arg(ext_force),
-                solver->positions.size() / 3, solver->ext_force);
-#endif
+
+        const int WARP_SIZE = 64;
+        set_external_acceleration<<<(solver->positions.size() / 3) / WARP_SIZE + 1, WARP_SIZE>>>(
+                        viennacl::cuda_arg(ext_force),
+                        solver->positions.size() / 3, solver->ext_force);
+
         ext_force = viennacl::linalg::prod(solver->mass_mat, ext_force);
         const viennacl::vector<float> inertia_y = 2.0f * solver->positions - solver->positions_last;
         const viennacl::vector<float> mass_y = viennacl::linalg::prod(solver->mass_mat, inertia_y);
+
+        size_t const n_constraints = solver->attachments.size() + solver->springs.size();
+        viennacl::vector<float> d(3 * n_constraints);
 
         solver->positions_last = solver->positions;
 
@@ -514,38 +503,14 @@ pd_solver_advance(struct PdSolver *solver, const uint32_t n_iterations){
                 clock_gettime(CLOCK_MONOTONIC, &local_start);
 
                 // Setup the constraints vector
-                size_t const n_constraints = solver->attachments.size() + solver->springs.size();
-                viennacl::vector<float> d(3 * n_constraints);
-#if !defined(VIENNACL_WITH_CUDA) || !USE_CUSTOM_KERNELS
-                vec_build.clear();
-                vec_build.resize(3 * n_constraints, 0);
-                size_t offset = 0;
-                for (const auto &c : solver->attachments){
-                        for (size_t j = 0; j < 3; ++j){
-                                vec_build[3 * offset + j] = c.position[j];
-                        }
-                        ++offset;
-                }
-                // TODO: We really should compute constraints on gpu
-                float const *mapped_pos = pd_solver_map_positions(solver);
-                for (const auto &c : solver->springs){
-                        vec3f const pa = vec3f(mapped_pos[3 * c.i[1]], mapped_pos[3 * c.i[1] + 1], mapped_pos[3 * c.i[1] + 2]);
-                        vec3f const pb = vec3f(mapped_pos[3 * c.i[0]], mapped_pos[3 * c.i[0] + 1], mapped_pos[3 * c.i[0] + 2]);
-                        vec3f const v = (pa - pb).normalized() * c.rest_length;
-                        for (size_t j = 0; j < 3; ++j){
-                                vec_build[3 * offset + j] = v[j];
-                        }
-                        ++offset;
-                }
-                viennacl::copy(vec_build.begin(), vec_build.end(), d.begin());
-#else
-                set_attachment_constraints<<<solver->attachments.size() / 32 + 1, 32>>>(viennacl::cuda_arg(solver->attachment_pos),
-                            viennacl::cuda_arg(d), solver->attachments.size());
+                set_attachment_constraints<<<solver->attachments.size() / WARP_SIZE + 1, WARP_SIZE>>>(
+                                viennacl::cuda_arg(solver->attachment_pos),
+                                viennacl::cuda_arg(d), solver->attachments.size());
 
-                set_spring_constraints<<<solver->springs.size() / 32 + 1, 32>>>(viennacl::cuda_arg(solver->positions),
-                        viennacl::cuda_arg(solver->spring_indices), viennacl::cuda_arg(solver->spring_rest_lengths),
-                        solver->attachments.size(), viennacl::cuda_arg(d), solver->springs.size());
-#endif
+                set_spring_constraints<<<solver->springs.size() / WARP_SIZE + 1, WARP_SIZE>>>(
+                                viennacl::cuda_arg(solver->positions),
+                                viennacl::cuda_arg(solver->spring_indices), viennacl::cuda_arg(solver->spring_rest_lengths),
+                                solver->attachments.size(), viennacl::cuda_arg(d), solver->springs.size());
 
                 viennacl::vector<float> b = mass_y + solver->t2 * (viennacl::linalg::prod(solver->j_mat, d) + ext_force);
 
@@ -562,9 +527,6 @@ pd_solver_advance(struct PdSolver *solver, const uint32_t n_iterations){
                 const viennacl::linalg::cg_tag custom_cg(solver->cg_tolerance, solver->cg_max_iterations);
                 viennacl::linalg::cg_solver<viennacl::vector<float>> custom_solver(custom_cg);
 
-#if USE_INITIAL_GUESS_Y
-                custom_solver.set_initial_guess(y);
-#endif
 #if USE_PRECONDITIONER
                 solver->positions = custom_solver(solver->a_mat, b, *solver->precond_mat);
 #else
