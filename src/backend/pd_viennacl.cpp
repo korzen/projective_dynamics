@@ -164,7 +164,7 @@ pd_solver_alloc(float const                         *positions,
         solver->t2 = timestep * timestep;
         solver->ext_force = vec3f(0.0f, 0.0f, -9.83f);
 #if !USE_CUSPARSE
-        solver->cg_tolerance = 1e-5;
+        solver->cg_tolerance = 1e-6;
         solver->cg_max_iterations = 300;
 #endif
 
@@ -306,6 +306,7 @@ pd_solver_alloc(float const                         *positions,
 
 #endif
 
+#if !USE_CUSPARSE
         // TODO: preconditioner settings
 #if PRECONDITIONER_ILUT
         const viennacl::linalg::ilut_tag ilut_conf(100, 1e-10);
@@ -343,6 +344,7 @@ pd_solver_alloc(float const                         *positions,
         solver->precond_mat = new viennacl::linalg::block_ilu_precond<viennacl::compressed_matrix<float>, viennacl::linalg::ilu0_tag>(solver->a_mat,
                                                                                                                                       ilu0_conf);
         solver->name += " precond Block ILU";
+#endif
 #endif
 
         std::cout << "NNZ in A matrix: " << solver->a_mat.nnz() << '\n';
@@ -553,15 +555,15 @@ pd_solver_advance(struct PdSolver *solver){
         /* GLOBAL STEP */
         struct timespec global_start;
         clock_gettime(CLOCK_MONOTONIC, &global_start);
+
+#if !USE_CUSPARSE
+        // Solve the system with ViennaCL's CG solver
         const viennacl::linalg::cg_tag custom_cg(solver->cg_tolerance, solver->cg_max_iterations);
         viennacl::linalg::cg_solver<viennacl::vector<float>> custom_solver(custom_cg);
 
 #if USE_INITIAL_GUESS_Y
         custom_solver.set_initial_guess(y);
 #endif
-
-#if !USE_CUSPARSE
-        // Solve the system with ViennaCL's CG solver
 #if USE_PRECONDITIONER
         solver->positions = custom_solver(solver->a_mat, b, *solver->precond_mat);
 #else
