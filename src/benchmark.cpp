@@ -60,13 +60,15 @@ int main(int argc, char **argv){
                 << "\tmax iters and max time in seconds must be >= 0\nOptions:\n"
                 << "\t--size <x> <y>       Cloth mesh size\n"
                 << "\t--mesh <filename>    Tet mesh file to load\n"
-                << "\t-n <number>          Number of iterations of projective dynamics per timestep\n";
+                << "\t-n <number>          Number of iterations of projective dynamics per timestep (default 10)\n"
+                << "\t-t <number>          Time taken in each timestep\n";
             return 1;
         }
 
         std::array<int, 2> cloth_resolution = {10, 10};
         std::string mesh_filename;
         uint32_t n_iterations = 10;
+        float timestep = 1.0f / 60.0f;
 
         if (arg_flag(argv, argv + argc, "--size")){
                 cloth_resolution = get_arg<int, 2>(argv, argv + argc, "--size");
@@ -77,16 +79,29 @@ int main(int argc, char **argv){
         }
         if (arg_flag(argv, argv + argc, "-n")){
                 n_iterations = get_arg<uint32_t>(argv, argv + argc, "-n");
+                if (n_iterations == 0){
+                        std::cout << "n_iterations must be > 0! Forcing to 1\n";
+                        n_iterations = 1;
+                }
+        }
+        if (arg_flag(argv, argv + argc, "-t")){
+                timestep = get_arg<float>(argv, argv + argc, "-t");
         }
 
-        const float timestep = 1.0f / (60.0f * n_iterations);
 
         PdMeshSurface *mesh = nullptr;
         if (!mesh_filename.empty()){
-                char *str = pk_io_read_file(mesh_filename.c_str());
-                assert(str);
-                mesh = pd_mesh_surface_mk_from_json(str);
-                free(str);
+                std::cout << "Loading mesh " << mesh_filename << "\n";
+                const size_t len = mesh_filename.size();
+                if (mesh_filename[len - 5] == 'b'){
+                        printf("mesh is binary\n");
+                        mesh = pd_mesh_surface_mk_from_binary(mesh_filename.c_str());
+                } else {
+                        char *str = pk_io_read_file(mesh_filename.c_str());
+                        assert(str);
+                        mesh = pd_mesh_surface_mk_from_json(str);
+                        free(str);
+                }
         } else {
                 mesh = pd_mesh_surface_mk_grid(cloth_resolution[0], cloth_resolution[1]);
         }
@@ -110,6 +125,8 @@ int main(int argc, char **argv){
                 auto start = std::chrono::high_resolution_clock::now();
                 pd_solver_advance(solver, n_iterations);
                 auto end = std::chrono::high_resolution_clock::now();
+                local_steps.push_back(millis{pd_solver_local_time(solver)});
+                global_steps.push_back(millis{pd_solver_global_time(solver)});
                 return std::chrono::duration_cast<millis>(end - start);
         });
         pb::Statistics<millis> local_stats{std::move(local_steps)};

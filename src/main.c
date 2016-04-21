@@ -232,8 +232,10 @@ key_cb(GLFWwindow *window, int key, int scancode, int action, int mods){
 static void
 realize()
 {
+#ifdef DEBUG
         glDebugMessageCallback(debug, NULL);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+#endif
         glEnable(GL_DEPTH_TEST);
         glPointSize(5.0f);
 
@@ -271,7 +273,7 @@ realize()
         struct PdMeshSurface *mesh;
         if (mesh_filename){
                 printf("Loading mesh %s\n", mesh_filename);
-                size_t len = strlen(mesh_filename);
+                const size_t len = strlen(mesh_filename);
                 if (mesh_filename[len - 5] == 'b'){
                         printf("mesh is binary\n");
                         mesh = pd_mesh_surface_mk_from_binary(mesh_filename);
