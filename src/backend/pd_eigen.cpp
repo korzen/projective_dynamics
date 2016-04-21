@@ -183,11 +183,8 @@ pd_solver_set_ext_force(struct PdSolver *solver, float const *force)
 
 
 void
-pd_solver_advance(struct PdSolver *solver)
+pd_solver_advance(struct PdSolver *solver, uint32_t const n_iterations)
 {
-        /* LOCAL STEP (we account everything except the global solve */
-        struct timespec local_start;
-        clock_gettime(CLOCK_MONOTONIC, &local_start);
 
         /* set external force */
         Eigen::VectorXf ext_accel = Eigen::VectorXf::Zero(solver->positions.size());
@@ -195,61 +192,59 @@ pd_solver_advance(struct PdSolver *solver)
                 for (int j = 0; j < 3; ++j)
                         ext_accel[3*i + j] = solver->ext_force[j];
         Eigen::VectorXf const ext_force = solver->mass_mat*ext_accel;
+        Eigen::VectorXf const mass_y = solver->mass_mat*(2.0f*solver->positions - solver->positions_last);
 
-
-        /* compute d vector for constraints */
-        /* MUST GO IN THIS ORDER */
-        uint32_t const n_constraints = solver->n_attachments + solver->n_springs;
-        Eigen::VectorXf d(3*n_constraints);
-        uint32_t offset = 0;
-        for (uint32_t i = 0; i < solver->n_attachments; ++i, ++offset) {
-                /* TODO: constness */
-                struct PdConstraintAttachment c = solver->attachments[i];
-                d.block<3, 1>(3*offset, 0) = Eigen::Map<Eigen::Vector3f>(c.position);
-        }
-
-        for (uint32_t i = 0; i < solver->n_springs; ++i, ++offset) {
-                struct PdConstraintSpring const c = solver->springs[i];
-                /* TODO: why swapping indices tamed the crazy net? */
-                Eigen::Vector3f const v = solver->positions.block<3, 1>(3*c.i[1], 0) - solver->positions.block<3, 1>(3*c.i[0], 0);
-                d.block<3, 1>(3*offset, 0) = v.normalized()*c.rest_length;
-        }
-
-
-        /* solve the global system */
-        /* TODO: we can shuffle things to possibly save time, for example add
-                 inertia and external force*timestep^2 and the multiply by mass
-                 matrix */
-        Eigen::VectorXf const y = 2.0f*solver->positions - solver->positions_last;
-        Eigen::VectorXf const b = solver->mass_mat*y + solver->t2*(solver->j_mat*d + ext_force);
-
-        /* TODO: this should not copy anything */
         solver->positions_last = solver->positions;
 
-        struct timespec local_end;
-        clock_gettime(CLOCK_MONOTONIC, &local_end);
+        for (uint32_t iter = 0; iter < n_iterations; ++iter) {
+                /* LOCAL STEP (we account everything except the global solve */
+                struct timespec local_start;
+                clock_gettime(CLOCK_MONOTONIC, &local_start);
 
+                /* compute d vector for constraints */
+                /* MUST GO IN THIS ORDER */
+                uint32_t const n_constraints = solver->n_attachments + solver->n_springs;
+                Eigen::VectorXf d(3*n_constraints);
+                uint32_t offset = 0;
+                for (uint32_t i = 0; i < solver->n_attachments; ++i, ++offset) {
+                        /* TODO: constness */
+                        struct PdConstraintAttachment c = solver->attachments[i];
+                        d.block<3, 1>(3*offset, 0) = Eigen::Map<Eigen::Vector3f>(c.position);
+                }
 
-        /* GLOBAL STEP */
-        struct timespec global_start;
-        clock_gettime(CLOCK_MONOTONIC, &global_start);
-        solver->positions = solver->llt.solve(b);
+                for (uint32_t i = 0; i < solver->n_springs; ++i, ++offset) {
+                        struct PdConstraintSpring const c = solver->springs[i];
+                        /* TODO: why swapping indices tamed the crazy net? */
+                        Eigen::Vector3f const v = solver->positions.block<3, 1>(3*c.i[1], 0) - solver->positions.block<3, 1>(3*c.i[0], 0);
+                        d.block<3, 1>(3*offset, 0) = v.normalized()*c.rest_length;
+                }
 
-        struct timespec global_end;
-        clock_gettime(CLOCK_MONOTONIC, &global_end);
+                Eigen::VectorXf const b = mass_y + solver->t2*(solver->j_mat*d + ext_force);
 
-        solver->global_time = pd_time_diff_ms(&global_start, &global_end);
-        solver->local_time = pd_time_diff_ms(&local_start, &local_end);
+                struct timespec local_end;
+                clock_gettime(CLOCK_MONOTONIC, &local_end);
 
-        solver->global_cma = (solver->global_time + solver->n_iters*solver->global_cma)/(solver->n_iters + 1);
-        solver->local_cma = (solver->local_time + solver->n_iters*solver->local_cma)/(solver->n_iters + 1);
+                /* GLOBAL STEP */
+                struct timespec global_start;
+                clock_gettime(CLOCK_MONOTONIC, &global_start);
+                solver->positions = solver->llt.solve(b);
 
-        if (!(solver->n_iters % 1000)) {
-                printf("Local CMA: %f ms\n", solver->local_cma);
-                printf("Global CMA: %f ms\n\n", solver->global_cma);
+                struct timespec global_end;
+                clock_gettime(CLOCK_MONOTONIC, &global_end);
+
+                solver->global_time = pd_time_diff_ms(&global_start, &global_end);
+                solver->local_time = pd_time_diff_ms(&local_start, &local_end);
+
+                solver->global_cma = (solver->global_time + solver->n_iters*solver->global_cma)/(solver->n_iters + 1);
+                solver->local_cma = (solver->local_time + solver->n_iters*solver->local_cma)/(solver->n_iters + 1);
+
+                if (!(solver->n_iters % 1000)) {
+                        printf("Local CMA: %f ms\n", solver->local_cma);
+                        printf("Global CMA: %f ms\n\n", solver->global_cma);
+                }
+
+                ++solver->n_iters;
         }
-
-        ++solver->n_iters;
 }
 
 

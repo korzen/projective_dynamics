@@ -47,7 +47,7 @@ enum { n_solvers = 2, };
 static struct PdSolver *solvers[n_solvers];
 
 static uint32_t n_iterations = 10;
-static float timestep = 1.0f/(60.0f*10);
+static float timestep = 1.0f/60.0f;
 static uint32_t resolution_x = 16;
 static uint32_t resolution_y = 16;
 static char *mesh_filename;
@@ -368,35 +368,33 @@ realize()
 static void
 simulate()
 {
-        for (uint32_t i = 0; i < n_iterations; ++i) {
-                struct timespec iters_start;
-                clock_gettime(CLOCK_MONOTONIC, &iters_start);
+        struct timespec resolve_start;
+        clock_gettime(CLOCK_MONOTONIC, &resolve_start);
 
-                #pragma omp parallel for
-                for (int j = 0; j < n_solvers; ++j)
-                        pd_solver_advance(solvers[j]);
+        #pragma omp parallel for
+        for (int j = 0; j < n_solvers; ++j)
+                pd_solver_advance(solvers[j], n_iterations);
 
-                /* reset the attachment constraint on shared border */
-                float const *const pos[2] = {
-                        pd_solver_map_positions(solvers[0]),
-                        pd_solver_map_positions(solvers[1]),
-                };
+        /* reset the attachment constraint on shared border */
+        float const *const pos[2] = {
+                pd_solver_map_positions(solvers[0]),
+                pd_solver_map_positions(solvers[1]),
+        };
 
-                struct PdConstraintAttachment *attachments[2] = {
-                        pd_solver_map_attachments(solvers[0]),
-                        pd_solver_map_attachments(solvers[1]),
-                };
+        struct PdConstraintAttachment *attachments[2] = {
+                pd_solver_map_attachments(solvers[0]),
+                pd_solver_map_attachments(solvers[1]),
+        };
 
-                for (uint32_t i = 1; i <= resolution_y; ++i)
-                        for (int j = 0; j < 3; ++j) {
-                                attachments[0][i].position[j] = pos[1][3*(resolution_x*i - 2) + j];
-                                attachments[1][i].position[j] = pos[0][3*(resolution_x*i - 2) + j];
-                        }
+        for (uint32_t i = 1; i <= resolution_y; ++i)
+                for (int j = 0; j < 3; ++j) {
+                        attachments[0][i].position[j] = pos[1][3*(resolution_x*i - 2) + j];
+                        attachments[1][i].position[j] = pos[0][3*(resolution_x*i - 2) + j];
+                }
 
-                struct timespec iters_end;
-                clock_gettime(CLOCK_MONOTONIC, &iters_end);
-                printf("Iterations time: %f ms\n", pd_time_diff_ms(&iters_start, &iters_end));
-        }
+        struct timespec resolve_end;
+        clock_gettime(CLOCK_MONOTONIC, &resolve_end);
+        printf("Resolve time: %f ms\n", pd_time_diff_ms(&resolve_start, &resolve_end));
 }
 
 
@@ -523,7 +521,8 @@ main(int argc, char **argv)
             printf("Usage: ./pd_benchmark [options]\n"
                 "\t--size <x> <y>       Cloth mesh size (default 10 10)\n"
                 "\t--mesh <filename>    Tet mesh file to load\n"
-                "\t-n <number>          Number of iterations of projective dynamics per timestep (default 10)\n");
+                "\t-n <number>          Number of iterations of projective dynamics per timestep (default 10)\n",
+                "\t-t <number>          Time taken in each timestep\n");
             return 0;
         }
         if (arg_flag(argv, argv + argc, "--size")){
@@ -540,7 +539,9 @@ main(int argc, char **argv)
                         printf("iteration count must be > 0! Forcing to 1\n");
                         n_iterations = 1;
                 }
-                timestep = 1.0f/(60.0f*n_iterations);
+        }
+        if (arg_flag(argv, argv + argc, "-t")){
+                timestep = get_arg<float>(argv, argv + argc, "-t");
         }
 
         if (!glfwInit())

@@ -106,12 +106,7 @@ int main(int argc, char **argv){
         global_steps.reserve(bench_iters * n_iterations);
         auto full_solve_stats = bencher([&](){
                 auto start = std::chrono::high_resolution_clock::now();
-                for (uint32_t i = 0; i < n_iterations; ++i){
-                        pd_solver_advance(solver);
-
-                        local_steps.push_back(millis{pd_solver_local_time(solver)});
-                        global_steps.push_back(millis{pd_solver_global_time(solver)});
-                }
+                pd_solver_advance(solver, n_iterations);
                 auto end = std::chrono::high_resolution_clock::now();
                 return std::chrono::duration_cast<millis>(end - start);
         });
