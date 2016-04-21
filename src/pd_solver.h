@@ -35,7 +35,7 @@ pd_solver_set_ext_force(struct PdSolver *solver, float const *force);
 
 
 void
-pd_solver_advance(struct PdSolver *solver);
+pd_solver_advance(struct PdSolver *solver, uint32_t const n_iterations);
 
 
 float const *
