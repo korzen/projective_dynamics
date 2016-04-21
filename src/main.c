@@ -469,7 +469,7 @@ int
 main(int argc, char **argv)
 {
         if (arg_flag(argv, argv + argc, "-h")){
-            printf("Usage: ./pd_benchmark [options]\n"
+            printf("Usage: ./pd [options]\n"
                 "\t--size <x> <y>       Cloth mesh size (default 10 10)\n"
                 "\t--mesh <filename>    Tet mesh file to load\n"
                 "\t-n <number>          Number of iterations of projective dynamics per timestep (default 10)\n"
