@@ -1,7 +1,7 @@
 /* picks first with 1 set */
 #define PRECONDITIONER_ILUT        0
-#define PRECONDITIONER_AMG         0
-#define PRECONDITIONER_JACOBI      1
+#define PRECONDITIONER_AMG         1
+#define PRECONDITIONER_JACOBI      0
 #define PRECONDITIONER_ROW_SCALING 0
 #define PRECONDITIONER_ICHOL0      0
 #define PRECONDITIONER_CHOW_PATEL  0
@@ -338,8 +338,8 @@ pd_solver_alloc(float const                         *positions,
         solver->name += " precond ILU0";
 #elif PRECONDITIONER_BLOCK_ILU
         viennacl::linalg::ilu0_tag ilu0_conf;
-        solver->precond_mat = new viennacl::linalg::block_ilu_precond<viennacl::compressed_matrix<float>, viennacl::linalg::ilu0_tag>(solver->a_mat,
-                                                                                                                                      ilu0_conf);
+        solver->precond_mat = new viennacl::linalg::block_ilu_precond<viennacl::compressed_matrix<float>,
+			viennacl::linalg::ilu0_tag>(solver->a_mat, ilu0_conf);
         solver->name += " precond Block ILU";
 #endif
 #endif

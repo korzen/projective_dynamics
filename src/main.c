@@ -232,8 +232,10 @@ key_cb(GLFWwindow *window, int key, int scancode, int action, int mods){
 static void
 realize()
 {
+#ifdef DEBUG
         glDebugMessageCallback(debug, NULL);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+#endif
         glEnable(GL_DEPTH_TEST);
         glPointSize(5.0f);
 
@@ -271,7 +273,7 @@ realize()
         struct PdMeshSurface *mesh;
         if (mesh_filename){
                 printf("Loading mesh %s\n", mesh_filename);
-                size_t len = strlen(mesh_filename);
+                const size_t len = strlen(mesh_filename);
                 if (mesh_filename[len - 5] == 'b'){
                         printf("mesh is binary\n");
                         mesh = pd_mesh_surface_mk_from_binary(mesh_filename);
@@ -469,7 +471,7 @@ int
 main(int argc, char **argv)
 {
         if (arg_flag(argv, argv + argc, "-h")){
-            printf("Usage: ./pd_benchmark [options]\n"
+            printf("Usage: ./pd [options]\n"
                 "\t--size <x> <y>       Cloth mesh size (default 10 10)\n"
                 "\t--mesh <filename>    Tet mesh file to load\n"
                 "\t-n <number>          Number of iterations of projective dynamics per timestep (default 10)\n"
