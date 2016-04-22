@@ -112,15 +112,13 @@ int main(int argc, char **argv){
                 mesh->attachments, mesh->n_attachments, mesh->springs, mesh->n_springs, timestep);
         assert(solver);
 
-        std::cout << "Benchmarking solver " << pd_solver_name(solver) << "\n";
+        std::cout << "Benchmarking solver " << pd_solver_name(solver) << std::endl;
 
         using millis = std::chrono::duration<double, std::milli>;
         pb::Benchmarker<millis> bencher(bench_iters, std::chrono::seconds{bench_seconds});
         // We're also custom timing the local and global steps as well
         std::vector<millis> local_steps;
         std::vector<millis> global_steps;
-        local_steps.reserve(bench_iters * n_iterations);
-        global_steps.reserve(bench_iters * n_iterations);
         auto full_solve_stats = bencher([&](){
                 auto start = std::chrono::high_resolution_clock::now();
                 pd_solver_advance(solver, n_iterations);
@@ -138,9 +136,12 @@ int main(int argc, char **argv){
 
         pd_mesh_surface_free(mesh);
 
-        std::cout << "Backend: " << pd_solver_name(solver) << "\n"
-                << "Local Solve stats:\n" << local_stats << "\n"
-                << "Global Solve stats:\n" << global_stats << "\n"
-                << "Full Solve stats:\n" << full_solve_stats << "\n";
+        std::cout << "Solver: " << pd_solver_name(solver) << "\n"
+                << "Local Solve stats:\n" << local_stats
+                << "\n---------------------\n"
+                << "Global Solve stats:\n" << global_stats
+                << "\n---------------------\n"
+                << "Full Solve stats:\n" << full_solve_stats
+                << "\n---------------------" << std::endl;
         return 0;
 }
