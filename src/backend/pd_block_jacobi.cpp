@@ -1,3 +1,4 @@
+#include <cinttypes>
 #include <cstdlib>
 #include <cstring>
 
@@ -180,26 +181,30 @@ pd_solver_set_ext_force(struct PdSolver *solver, float const *force)
 static void
 solve(struct PdSolver *solver, Eigen::VectorXf const &b)
 {
-        float const epsilon = 1e-6;
+        float const epsilon = 1e-1;
 
         float error = 1.0f;
+        uint32_t iters = 0;
         while (error > epsilon) {
                 for (uint32_t i = 0; i < solver->m; ++i) {
                         Eigen::VectorXf y = b.block(i*solver->block_n, 0, solver->block_n, 1);
 
                         for (uint32_t j = 0; j < solver->n; ++j) {
                                 if (i != j); else continue;
-                                y -= solver->a_mat.block(i*solver->block_m, j*solver->block_n, solver->block_m, solver->block_n)*solver->positions_last.block(i*solver->block_n, 0, solver->block_n, 1);
+                                y -= solver->a_mat.block(i*solver->block_m, j*solver->block_n, solver->block_m, solver->block_n)*solver->positions_last.block(j*solver->block_n, 0, solver->block_n, 1);
                         }
 
                         Eigen::SimplicialLLT<Eigen::SparseMatrix<float>, Eigen::Upper> llt;
                         llt.compute(solver->a_mat.block(i*solver->block_m, i*solver->block_n, solver->block_m, solver->block_n));
                         solver->positions.block(i*solver->block_n, 0, solver->block_n, 1) = llt.solve(y);
 
-                        /* TODO: compute error */
-                        error *= 0.01f;
                 }
+
+                /* TODO: compute error */
+                error -= 0.01f;
+                ++iters;
         }
+        printf("Iteration count: %"PRIu32"\n", iters);
 }
 
 
