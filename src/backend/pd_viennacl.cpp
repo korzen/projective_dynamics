@@ -1,21 +1,3 @@
-/* picks first with 1 set */
-#define PRECONDITIONER_ILUT        0
-#define PRECONDITIONER_AMG         1
-#define PRECONDITIONER_JACOBI      0
-#define PRECONDITIONER_ROW_SCALING 0
-#define PRECONDITIONER_ICHOL0      0
-#define PRECONDITIONER_CHOW_PATEL  0
-#define PRECONDITIONER_ILU0        0
-#define PRECONDITIONER_BLOCK_ILU   0
-#define USE_PRECONDITIONER (PRECONDITIONER_ILUT || \
-                            PRECONDITIONER_AMG || \
-                            PRECONDITIONER_JACOBI || \
-                            PRECONDITIONER_ROW_SCALING || \
-                            PRECONDITIONER_ICHOL0 || \
-                            PRECONDITIONER_CHOW_PATEL || \
-                            PRECONDITIONER_ILU0 || \
-                            PRECONDITIONER_BLOCK_ILU)
-
 #include <cassert>
 #include <vector>
 #include <algorithm>
@@ -78,6 +60,202 @@ vec3f operator*(const vec3f &a, const float c){
         return vec3f(a.x * c, a.y * c, a.z * c);
 }
 
+enum PrecondType {
+        ILUT = 0,
+        AMG,
+        JACOBI,
+        ROW_SCALING,
+        ICHOL0,
+        CHOW_PATEL,
+        ILU0,
+        BLOCK_ILU,
+        NONE,
+};
+template<PrecondType P>
+struct viennacl_precond {};
+
+template<>
+struct viennacl_precond<ILUT> {
+        using type = viennacl::linalg::ilut_precond<viennacl::compressed_matrix<float>>;
+        using tag = viennacl::linalg::ilut_tag;
+};
+template<>
+struct viennacl_precond<AMG> {
+        using type = viennacl::linalg::amg_precond<viennacl::compressed_matrix<float>>;
+        using tag = viennacl::linalg::amg_tag;
+};
+template<>
+struct viennacl_precond<JACOBI> {
+        using type = viennacl::linalg::jacobi_precond<viennacl::compressed_matrix<float>>;
+        using tag = viennacl::linalg::jacobi_tag;
+};
+template<>
+struct viennacl_precond<ROW_SCALING> {
+        using type = viennacl::linalg::row_scaling<viennacl::compressed_matrix<float>>;
+        using tag = viennacl::linalg::row_scaling_tag;
+};
+template<>
+struct viennacl_precond<ICHOL0> {
+        using type = viennacl::linalg::ichol0_precond<viennacl::compressed_matrix<float>>;
+        using tag = viennacl::linalg::ichol0_tag;
+};
+template<>
+struct viennacl_precond<CHOW_PATEL> {
+        using type = viennacl::linalg::chow_patel_ilu_precond<viennacl::compressed_matrix<float>>;
+        using tag = viennacl::linalg::chow_patel_tag;
+};
+template<>
+struct viennacl_precond<ILU0> {
+        using type = viennacl::linalg::ilu0_precond<viennacl::compressed_matrix<float>>;
+        using tag = viennacl::linalg::ilu0_tag;
+};
+template<>
+struct viennacl_precond<BLOCK_ILU> {
+        using type = viennacl::linalg::block_ilu_precond<viennacl::compressed_matrix<float>,
+              viennacl::linalg::ilu0_tag>;
+        using tag = viennacl::linalg::ilu0_tag;
+};
+
+class Preconditioner {
+        using ilut_t = viennacl::linalg::ilut_precond<viennacl::compressed_matrix<float>>;
+        using amg_t = viennacl::linalg::amg_precond<viennacl::compressed_matrix<float>>;
+        using jacobi_t = viennacl::linalg::jacobi_precond<viennacl::compressed_matrix<float>>;
+        using row_scaling_t = viennacl::linalg::row_scaling<viennacl::compressed_matrix<float>>;
+        using ichol0_t = viennacl::linalg::ichol0_precond<viennacl::compressed_matrix<float>>;
+        using chow_patel_t = viennacl::linalg::chow_patel_ilu_precond<viennacl::compressed_matrix<float>>;
+        using ilu0_t = viennacl::linalg::ilu0_precond<viennacl::compressed_matrix<float>>;
+        using block_ilu_t = viennacl::linalg::block_ilu_precond<viennacl::compressed_matrix<float>,
+              viennacl::linalg::ilu0_tag>;
+
+        void *precond;
+        PrecondType current;
+
+public:
+        Preconditioner() : precond(nullptr), current(NONE){}
+        ~Preconditioner(){
+                delete_precond();
+        }
+        const PrecondType& get_current() const {
+                return current;
+        }
+        void set(const PrecondType type, const viennacl::compressed_matrix<float> &a);
+        const ilut_t& get_ilut() const {
+                return get<ILUT>();
+        }
+        const amg_t& get_amg() const {
+                return get<AMG>();
+        }
+        const jacobi_t& get_jacobi() const {
+                return get<JACOBI>();
+        }
+        const row_scaling_t& get_row_scaling() const {
+                return get<ROW_SCALING>();
+        }
+        const ichol0_t& get_ichol0() const {
+                return get<ICHOL0>();
+        }
+        const chow_patel_t& get_chow_patel() const {
+                return get<CHOW_PATEL>();
+        }
+        const ilu0_t& get_ilu0() const {
+                return get<ILU0>();
+        }
+        const block_ilu_t& get_block_ilu() const {
+                return get<BLOCK_ILU>();
+        }
+
+private:
+        template<PrecondType P>
+        const typename viennacl_precond<P>::type& get() const {
+                assert(current == P);
+                return *reinterpret_cast<typename viennacl_precond<P>::type*>(precond);
+        }
+        template<PrecondType P>
+        void set(const viennacl::compressed_matrix<float> &a){
+                delete_precond();
+                using Type = typename viennacl_precond<P>::type;
+                using Tag = typename viennacl_precond<P>::tag;
+                precond = static_cast<void*>(new Type(a, Tag()));
+                current = P;
+        }
+        // Note: we need to call the destructor so can't just delete the void*
+        void delete_precond(){
+                if (!precond){
+                        return;
+                }
+                switch (current){
+                        case ILUT:
+                                delete reinterpret_cast<ilut_t*>(precond);
+                                break;
+                        case AMG:
+                                delete reinterpret_cast<amg_t*>(precond);
+                                break;
+                        case JACOBI:
+                                delete reinterpret_cast<jacobi_t*>(precond);
+                                break;
+                        case ROW_SCALING:
+                                delete reinterpret_cast<row_scaling_t*>(precond);
+                                break;
+                        case ICHOL0:
+                                delete reinterpret_cast<ichol0_t*>(precond);
+                                break;
+                        case CHOW_PATEL:
+                                delete reinterpret_cast<chow_patel_t*>(precond);
+                                break;
+                        case ILU0:
+                                delete reinterpret_cast<ilu0_t*>(precond);
+                                break;
+                        case BLOCK_ILU:
+                                delete reinterpret_cast<block_ilu_t*>(precond);
+                                break;
+                        default:
+                                break;
+                }
+        }
+};
+template<>
+void Preconditioner::set<AMG>(const viennacl::compressed_matrix<float> &a){
+        delete_precond();
+        using Type = viennacl_precond<AMG>::type;
+        using Tag = viennacl_precond<AMG>::tag;
+        Type *t = new Type(a, Tag());
+        t->setup();
+        precond = static_cast<void*>(t);
+        current = AMG;
+}
+void Preconditioner::set(const PrecondType type, const viennacl::compressed_matrix<float> &a){
+        switch (type){
+                case ILUT:
+                        set<ILUT>(a);
+                        break;
+                case AMG:
+                        set<AMG>(a);
+                        break;
+                case JACOBI:
+                        set<JACOBI>(a);
+                        break;
+                case ROW_SCALING:
+                        set<ROW_SCALING>(a);
+                        break;
+                case ICHOL0:
+                        set<ICHOL0>(a);
+                        break;
+                case CHOW_PATEL:
+                        set<CHOW_PATEL>(a);
+                        break;
+                case ILU0:
+                        set<ILU0>(a);
+                        break;
+                case BLOCK_ILU:
+                        set<BLOCK_ILU>(a);
+                        break;
+                default:
+                        delete_precond();
+                        current = NONE;
+                        break;
+        }
+}
+
 struct PdSolver {
         viennacl::vector<float> positions;
         viennacl::vector<float> positions_last;
@@ -85,24 +263,7 @@ struct PdSolver {
         viennacl::compressed_matrix<float> l_mat;
         viennacl::compressed_matrix<float> j_mat;
         viennacl::compressed_matrix<float> a_mat;
-        
-#if PRECONDITIONER_ILUT
-        viennacl::linalg::ilut_precond<viennacl::compressed_matrix<float>> *precond_mat;
-#elif PRECONDITIONER_AMG
-        viennacl::linalg::amg_precond<viennacl::compressed_matrix<float>> *precond_mat;
-#elif PRECONDITIONER_JACOBI
-        viennacl::linalg::jacobi_precond<viennacl::compressed_matrix<float>> *precond_mat;
-#elif PRECONDITIONER_ROW_SCALING
-        viennacl::linalg::row_scaling<viennacl::compressed_matrix<float>> *precond_mat;
-#elif PRECONDITIONER_ICHOL0
-        viennacl::linalg::ichol0_precond<viennacl::compressed_matrix<float>> *precond_mat;
-#elif PRECONDITIONER_CHOW_PATEL
-        viennacl::linalg::chow_patel_ilu_precond<viennacl::compressed_matrix<float>> *precond_mat;
-#elif PRECONDITIONER_ILU0
-        viennacl::linalg::ilu0_precond<viennacl::compressed_matrix<float>> *precond_mat;
-#elif PRECONDITIONER_BLOCK_ILU
-        viennacl::linalg::block_ilu_precond<viennacl::compressed_matrix<float>, viennacl::linalg::ilu0_tag> *precond_mat;
-#endif
+        Preconditioner preconditioner;
 
         std::vector<PdConstraintAttachment> attachments;
         viennacl::vector<float> attachment_pos;
@@ -303,47 +464,6 @@ pd_solver_alloc(float const                         *positions,
 
 #endif
 
-#if !USE_CUSPARSE
-        // TODO: preconditioner settings
-#if PRECONDITIONER_ILUT
-        const viennacl::linalg::ilut_tag ilut_conf(100, 1e-10);
-        solver->precond_mat = new viennacl::linalg::ilut_precond<viennacl::compressed_matrix<float>>(solver->a_mat, ilut_conf);
-        solver->name += " precond ILUT";
-#elif PRECONDITIONER_AMG
-        viennacl::linalg::amg_tag amg_conf;
-        solver->precond_mat = new viennacl::linalg::amg_precond<viennacl::compressed_matrix<float>>(solver->a_mat, amg_conf);
-        solver->precond_mat->setup();
-        solver->name += " precond AMG";
-#elif PRECONDITIONER_JACOBI
-        solver->precond_mat = new viennacl::linalg::jacobi_precond<viennacl::compressed_matrix<float>>(solver->a_mat,
-                                                                                                       viennacl::linalg::jacobi_tag());
-        solver->name += " precond Jacobi";
-#elif PRECONDITIONER_ROW_SCALING
-        solver->precond_mat = new viennacl::linalg::row_scaling<viennacl::compressed_matrix<float>>(solver->a_mat,
-                                                                                                    viennacl::linalg::row_scaling_tag());
-        solver->name += " precond Row Scaling";
-#elif PRECONDITIONER_ICHOL0
-        solver->precond_mat = new viennacl::linalg::ichol0_precond<viennacl::compressed_matrix<float>>(solver->a_mat,
-                                                                                                       viennacl::linalg::ichol0_tag());
-        solver->name += " precond ICHOL0";
-#elif PRECONDITIONER_CHOW_PATEL
-        /* first argument is number of nonlinear sweeps; second is number of Jacobi iterations per triangular "solve" */
-        viennacl::linalg::chow_patel_tag chow_patel_conf(3, 2);
-        solver->precond_mat = new viennacl::linalg::chow_patel_ilu_precond<viennacl::compressed_matrix<float>>(solver->a_mat,
-                                                                                                               chow_patel_conf);
-        solver->name += " precond Chow Patel";
-#elif PRECONDITIONER_ILU0
-        viennacl::linalg::ilu0_tag ilu0_conf;
-        solver->precond_mat = new viennacl::linalg::ilu0_precond<viennacl::compressed_matrix<float>>(solver->a_mat, ilu0_conf);
-        solver->name += " precond ILU0";
-#elif PRECONDITIONER_BLOCK_ILU
-        viennacl::linalg::ilu0_tag ilu0_conf;
-        solver->precond_mat = new viennacl::linalg::block_ilu_precond<viennacl::compressed_matrix<float>,
-			viennacl::linalg::ilu0_tag>(solver->a_mat, ilu0_conf);
-        solver->name += " precond Block ILU";
-#endif
-#endif
-
         std::cout << "NNZ in A matrix: " << solver->a_mat.nnz() << '\n';
         std::cout << "Sparsity of A matrix: " << (double)solver->a_mat.nnz()/solver->a_mat.size1()/solver->a_mat.size2() << '\n';
 
@@ -417,10 +537,6 @@ pd_solver_free(struct PdSolver *solver)
         cusolverSpDestroyCsrcholInfo(solver->cusolver_chol_info);
         cudaFree(solver->cu_workspace);
 #endif
-#endif
-
-#if USE_PRECONDITIONER
-        delete solver->precond_mat;
 #endif
         delete solver;
 }
@@ -527,12 +643,36 @@ pd_solver_advance(struct PdSolver *solver, const uint32_t n_iterations){
                 const viennacl::linalg::cg_tag custom_cg(solver->cg_tolerance, solver->cg_max_iterations);
                 viennacl::linalg::cg_solver<viennacl::vector<float>> custom_solver(custom_cg);
 
-#if USE_PRECONDITIONER
-                solver->positions = custom_solver(solver->a_mat, b, *solver->precond_mat);
-#else
-                // default cg uses tolerance 1e-8 and at most 300 iterations
-                solver->positions = custom_solver(solver->a_mat, b);
-#endif
+                switch (solver->preconditioner.get_current()){
+                        case ILUT:
+                                solver->positions = custom_solver(solver->a_mat, b, solver->preconditioner.get_ilut());
+                                break;
+                        case AMG:
+                                solver->positions = custom_solver(solver->a_mat, b, solver->preconditioner.get_amg());
+                                break;
+                        case JACOBI:
+                                solver->positions = custom_solver(solver->a_mat, b, solver->preconditioner.get_jacobi());
+                                break;
+                        case ROW_SCALING:
+                                solver->positions = custom_solver(solver->a_mat, b, solver->preconditioner.get_row_scaling());
+                                break;
+                        case ICHOL0:
+                                solver->positions = custom_solver(solver->a_mat, b, solver->preconditioner.get_ichol0());
+                                break;
+                        case CHOW_PATEL:
+                                solver->positions = custom_solver(solver->a_mat, b, solver->preconditioner.get_chow_patel());
+                                break;
+                        case ILU0:
+                                solver->positions = custom_solver(solver->a_mat, b, solver->preconditioner.get_ilu0());
+                                break;
+                        case BLOCK_ILU:
+                                solver->positions = custom_solver(solver->a_mat, b, solver->preconditioner.get_block_ilu());
+                                break;
+                        // If no preconditioner has been picked
+                        default:
+                                solver->positions = custom_solver(solver->a_mat, b);
+                                break;
+                }
                 solver->cg_last_iterations = custom_solver.tag().iters();
                 solver->cg_last_error = custom_solver.tag().error();
 
@@ -625,6 +765,18 @@ pd_solver_draw_ui(struct PdSolver *solver)
                 solver->cg_max_iterations = std::max(solver->cg_max_iterations, 1);
                 ImGui::Text("Last Solve: %d iterations %f error", solver->cg_last_iterations,
                         solver->cg_last_error);
+                const static char* preconditioners[] = {
+                        "ILUT", "AMG", "JACOBI", "ROW_SCALING", "ICHOL0",
+                        "CHOW_PATEL", "ILU0", "BLOCK_ILU", "NONE",
+                };
+                int current = solver->preconditioner.get_current();
+                if (ImGui::Combo("Preconditioner", &current, preconditioners, NONE + 1)){
+                        std::cout << "changing precond\n";
+                        solver->preconditioner.set(PrecondType(current), solver->a_mat);
+                        solver->global_cma = 0;
+                        solver->local_cma = 0;
+                        solver->n_iters = 0;
+                }
         }
         ImGui::End();
 #endif
