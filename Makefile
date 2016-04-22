@@ -23,6 +23,9 @@ else ifeq ($(BACKEND), cusparse_low)
 	PD_SO_NAME=libpd_solver_cuda.so
 	SOLVER_DEFINES=-DVIENNACL_WITH_CUDA -DUSE_CUSPARSE=1 -DUSE_CUSPARSE_LOW_LEVEL=1
 	CUDA_LIBS=-L$(CUDA)/lib64/ -lcudart -lcusolver -lcusparse
+else ifeq ($(BACKEND), block_jacobi)
+	LIBPD_SOLVER=pd_solver_block_jacobi
+	PD_SO_NAME=libpd_solver_block_jacobi.so
 else
 	BACKEND=eigen
 	LIBPD_SOLVER=pd_solver_eigen
@@ -60,6 +63,9 @@ obj/imgui/%.o: ext/imgui/%.cpp
 	$(CXX) -Iext/imgui -fPIC -c $^ -o $@
 
 libpd_solver_eigen.so: src/backend/pd_eigen.cpp obj/libimgui.so $(BACKENDF)
+	$(CXX) $(CXXFLAGS) $(EIGEN3) --shared -fPIC $< -o $@
+
+libpd_solver_block_jacobi.so: src/backend/pd_block_jacobi.cpp obj/libimgui.so $(BACKENDF)
 	$(CXX) $(CXXFLAGS) $(EIGEN3) --shared -fPIC $< -o $@
 
 libpd_solver_cuda.so: src/backend/pd_viennacl.cpp obj/libimgui.so $(BACKENDF)
