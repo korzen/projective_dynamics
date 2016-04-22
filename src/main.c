@@ -492,7 +492,6 @@ main(int argc, char **argv)
                         printf("iteration count must be > 0! Forcing to 1\n");
                         n_iterations = 1;
                 }
-                timestep = 1.0f/60.0f;
         }
         if (arg_flag(argv, argv + argc, "-t")){
                 timestep = get_arg<float>(argv, argv + argc, "-t");
