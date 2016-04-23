@@ -330,6 +330,7 @@ realize()
         ubo_mapped->model.c[1][2] = 1.0f;
         ubo_mapped->model.c[2][1] = 1.0f;
         ubo_mapped->model.c[2][2] = 0.0f;
+        ubo_mapped->model.c[3][2] = 1.0f;
 
         ubo_mapped->view       = MAT4;
 
