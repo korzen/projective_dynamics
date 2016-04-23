@@ -6,11 +6,13 @@
 
 #include <Eigen/Core>
 #include <Eigen/Sparse>
+#include <imgui/imgui.h>
 
 #include "../pd_time.h"
 
 #include "../pd_solver.h"
 
+using SolverT = Eigen::SparseLU<Eigen::SparseMatrix<float>>;
 
 struct PdSolver {
         Eigen::VectorXf positions;
@@ -19,6 +21,9 @@ struct PdSolver {
         Eigen::SparseMatrix<float> mass_mat;
         Eigen::SparseMatrix<float> l_mat;
         Eigen::SparseMatrix<float> j_mat;
+        // Our blocks of linear systems, SparseLU is move only and
+        // we can't do a vector of move-only types
+        SolverT *blocks;
 
         struct PdConstraintAttachment *attachments;
         uint32_t n_attachments;
@@ -39,6 +44,10 @@ struct PdSolver {
 
         uint32_t m, n;
         uint32_t block_m, block_n;
+
+        /* Information about the block Jacobi solve to display */
+        uint32_t block_jacobi_iters;
+        float block_jacobi_err;
 };
                 
 
@@ -58,6 +67,10 @@ pd_solver_alloc(float const                         *positions,
         solver->n = 3;
         solver->block_m = n_positions;
         solver->block_n = n_positions;
+        // We only solve blocks on the diagonal with the LU solve, so I think this
+        // implies we **must** have a square decomposition
+        assert(solver->m == solver->n);
+        assert(solver->block_m == solver->block_n);
         
         solver->positions = Eigen::VectorXf::Map(positions, 3*n_positions);
         solver->positions_last = solver->positions;
@@ -71,11 +84,10 @@ pd_solver_alloc(float const                         *positions,
         /* initialize mass matrix */
         float const total_mass = 1.0f;
 
-        /* TODO: not sure if bug in Eigen */
-        /*solver->mass_mat.diagonal().setConstant(total_mass/n_positions);*/
         for (uint32_t i = 0; i < n_positions; ++i)
                 for (int j = 0; j < 3; ++j)
                         triplets.emplace_back(3*i + j, 3*i + j, total_mass/n_positions);
+
         solver->mass_mat.resize(3*n_positions, 3*n_positions);
         solver->mass_mat.setFromTriplets(std::begin(triplets), std::end(triplets));
 
@@ -153,12 +165,18 @@ pd_solver_alloc(float const                         *positions,
 
         /* prefactor the constant term (mesh topology/masses are fixed) */
         solver->a_mat = solver->mass_mat + solver->t2*solver->l_mat;
+        solver->a_mat.makeCompressed();
 
+        // Build our list of blocks to be solved (we only need solvers for the diagonal blocks)
+        solver->blocks = new SolverT[solver->m];
+        for (uint32_t i = 0; i < solver->m; ++i){
+                solver->blocks[i].compute(solver->a_mat.block(i * solver->block_m, i * solver->block_n,
+                                        solver->block_m, solver->block_n));
+        }
 
         solver->local_cma  = 0.0;
         solver->global_cma = 0.0;
         solver->n_iters    = 0;
-
 
         return solver;
 }
@@ -169,6 +187,7 @@ pd_solver_free(struct PdSolver *solver)
 {
         free(solver->attachments);
         free(solver->springs);
+        delete[] solver->blocks;
         delete solver;
 }
 
@@ -183,29 +202,31 @@ pd_solver_set_ext_force(struct PdSolver *solver, float const *force)
 static void
 solve(struct PdSolver *solver, Eigen::VectorXf const &b)
 {
-        float const epsilon = 1e-1;
+        float const epsilon = 1e-6f;
 
         float error = 1.0f;
         uint32_t iters = 0;
-        while (error > epsilon) {
+        Eigen::VectorXf x_prev = solver->positions_last;
+        while (error > epsilon * epsilon || iters < 2) {
+#pragma omp parallel for
                 for (uint32_t i = 0; i < solver->m; ++i) {
                         Eigen::VectorXf y = b.block(i*solver->block_n, 0, solver->block_n, 1);
+                        SolverT &lu = solver->blocks[i];
 
                         for (uint32_t j = 0; j < solver->n; ++j) {
                                 if (i != j); else continue;
-                                y -= solver->a_mat.block(i*solver->block_m, j*solver->block_n, solver->block_m, solver->block_n)*solver->positions_last.block(j*solver->block_n, 0, solver->block_n, 1);
+                                y -= solver->a_mat.block(i*solver->block_m, j*solver->block_n, solver->block_m, solver->block_n)
+                                        * x_prev.block(j * solver->block_n, 0, solver->block_n, 1);
                         }
-
-                        Eigen::SimplicialLLT<Eigen::SparseMatrix<float>, Eigen::Upper> llt;
-                        llt.compute(solver->a_mat.block(i*solver->block_m, i*solver->block_n, solver->block_m, solver->block_n));
-                        solver->positions.block(i*solver->block_n, 0, solver->block_n, 1) = llt.solve(y);
+                        solver->positions.block(i*solver->block_n, 0, solver->block_n, 1) = lu.solve(y);
 
                 }
-                /* TODO: compute error */
-                error -= 0.01f;
+                x_prev = solver->positions;
+                error = (b - solver->a_mat * x_prev).squaredNorm();
                 ++iters;
         }
-        printf("Iteration count: %"PRIu32"\n", iters);
+        solver->block_jacobi_iters = iters;
+        solver->block_jacobi_err = error;
 }
 
 
@@ -225,6 +246,9 @@ pd_solver_advance(struct PdSolver *solver, uint32_t const n_iterations)
 
         for (uint32_t iter = 0; iter < n_iterations; ++iter) {
                 /* LOCAL STEP */
+                /* LOCAL STEP (we account everything except the global solve */
+                struct timespec local_start;
+                clock_gettime(CLOCK_MONOTONIC, &local_start);
                 uint32_t const n_constraints = solver->n_attachments + solver->n_springs;
                 Eigen::VectorXf d(3*n_constraints);
                 for (uint32_t i = 0; i < solver->n_attachments; ++i) {
@@ -235,16 +259,34 @@ pd_solver_advance(struct PdSolver *solver, uint32_t const n_iterations)
                 uint32_t const offset = solver->n_attachments;
                 for (uint32_t i = 0; i < solver->n_springs; ++i) {
                         struct PdConstraintSpring c = solver->springs[i];
-                        Eigen::Vector3f const v = solver->positions.block<3, 1>(3*c.i[1], 0) - solver->positions.block<3, 1>(3*c.i[0], 0);
+                        Eigen::Vector3f const v = solver->positions.block<3, 1>(3*c.i[1], 0)
+                                - solver->positions.block<3, 1>(3*c.i[0], 0);
                         d.block<3, 1>(3*(offset + i), 0) = v.normalized()*c.rest_length;
                 }
 
                 Eigen::VectorXf const b = mass_y + solver->t2*(solver->j_mat*d + ext_force);
-
+                struct timespec local_end;
+                clock_gettime(CLOCK_MONOTONIC, &local_end);
 
                 /* GLOBAL STEP */
-                /* TODO: pass references to data instead whole solver */
+                struct timespec global_start;
+                clock_gettime(CLOCK_MONOTONIC, &global_start);
                 solve(solver, b);
+                struct timespec global_end;
+                clock_gettime(CLOCK_MONOTONIC, &global_end);
+
+                solver->global_time = pd_time_diff_ms(&global_start, &global_end);
+                solver->local_time = pd_time_diff_ms(&local_start, &local_end);
+
+                solver->global_cma = (solver->global_time + solver->n_iters*solver->global_cma)/(solver->n_iters + 1);
+                solver->local_cma = (solver->local_time + solver->n_iters*solver->local_cma)/(solver->n_iters + 1);
+
+                if (!(solver->n_iters % 1000)) {
+                        printf("Local CMA: %f ms\n", solver->local_cma);
+                        printf("Global CMA: %f ms\n\n", solver->global_cma);
+                }
+
+                ++solver->n_iters;
         }
 }
 
@@ -294,4 +336,9 @@ pd_solver_local_time(struct PdSolver const *solver)
 void
 pd_solver_draw_ui(struct PdSolver *solver)
 {
+        if (ImGui::Begin("Block Jacobi Solver")){
+                ImGui::Text("Error: %.9f\nBlock Jacobi Iterations: %u",
+                                solver->block_jacobi_err, solver->block_jacobi_iters);
+        }
+        ImGui::End();
 }
