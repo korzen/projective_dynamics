@@ -12,6 +12,7 @@
 
 #include "../pd_solver.h"
 
+// Would the diagonal blocks actually be SPD and we can use SimplicialLLT (or LDLT?)
 using SolverT = Eigen::SparseLU<Eigen::SparseMatrix<float>>;
 
 struct PdSolver {
@@ -226,7 +227,7 @@ solve(struct PdSolver *solver, Eigen::VectorXf const &b)
                 ++iters;
         }
         solver->block_jacobi_iters = iters;
-        solver->block_jacobi_err = error;
+        solver->block_jacobi_err = std::sqrt(error);
 }
 
 
