@@ -19,7 +19,6 @@ struct PdSolver {
         Eigen::SparseMatrix<float> mass_mat;
         Eigen::SparseMatrix<float> l_mat;
         Eigen::SparseMatrix<float> j_mat;
-        Eigen::SimplicialLLT<Eigen::SparseMatrix<float>, Eigen::Upper> llt;
 
         struct PdConstraintAttachment *attachments;
         uint32_t n_attachments;
@@ -62,6 +61,10 @@ pd_solver_alloc(float const                         *positions,
         
         solver->positions = Eigen::VectorXf::Map(positions, 3*n_positions);
         solver->positions_last = solver->positions;
+
+        solver->ext_force[0] = 0.0f;
+        solver->ext_force[1] = 0.0f;
+        solver->ext_force[2] = -9.8f;
 
         std::vector<Eigen::Triplet<float>> triplets;
 
@@ -150,7 +153,6 @@ pd_solver_alloc(float const                         *positions,
 
         /* prefactor the constant term (mesh topology/masses are fixed) */
         solver->a_mat = solver->mass_mat + solver->t2*solver->l_mat;
-        solver->llt.compute(solver->mass_mat + solver->t2*solver->l_mat);
 
 
         solver->local_cma  = 0.0;
@@ -199,7 +201,6 @@ solve(struct PdSolver *solver, Eigen::VectorXf const &b)
                         solver->positions.block(i*solver->block_n, 0, solver->block_n, 1) = llt.solve(y);
 
                 }
-
                 /* TODO: compute error */
                 error -= 0.01f;
                 ++iters;
