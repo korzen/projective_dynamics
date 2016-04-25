@@ -94,19 +94,35 @@ def parse_benchmarks(fname):
                     benches[mesh_type][active_name] = {}
     return benches
 
-benches = parse_benchmarks(sys.argv[1])
+# Loop through each file and get benchmarks for it
+match_label = re.compile("(?:\./)?(\w+)\.txt")
+benchmarks = {}
+for arg in sys.argv[1:]:
+    label = match_label.match(arg)
+    if label:
+        benchmarks[label.group(1)] = parse_benchmarks(arg)
+    else:
+        print("Unrecognized file: '{}'".format(arg))
+        sys.exit(1)
 
 plt.figure()
 cloths = ["32x32", "64x64", "128x128", "256x256", "512x512"]
-y_val = []
-y_err = []
-for key in cloths:
-    y_val.append(benches["cloth"][key]["global"].mean)
-    y_err.append(benches["cloth"][key]["global"].stddev)
+label_handles = []
 
-plt.errorbar(range(len(cloths)), y_val, yerr=y_err)
+for label in benchmarks:
+    y_val = []
+    y_err = []
+    print("plotting {}".format(label))
+    for key in cloths:
+        y_val.append(benchmarks[label]["cloth"][key]["global"].mean)
+        y_err.append(benchmarks[label]["cloth"][key]["global"].stddev)
+
+    handle = plt.errorbar(range(len(cloths)), y_val, yerr=y_err, label=label)
+    label_handles.append(handle)
+
 plt.xticks(range(len(cloths)), cloths)
 plt.ylabel("Time (ms)")
 plt.xlabel("Cloth Size")
+plt.legend(label_handles, benchmarks.keys())
 plt.show()
 
