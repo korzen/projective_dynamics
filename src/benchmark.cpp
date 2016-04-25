@@ -64,6 +64,7 @@ int main(int argc, char **argv){
                 << "\t-t <number>          Time taken in each timestep\n";
             return 1;
         }
+        std::cout << "********\npd_benchmark start\n";
 
         std::array<int, 2> cloth_resolution = {10, 10};
         std::string mesh_filename;
@@ -132,7 +133,6 @@ int main(int argc, char **argv){
         local_stats.time_suffix = " ms";
         global_stats.time_suffix = " ms";
         full_solve_stats.time_suffix = " ms";
-        pd_solver_free(solver);
 
         pd_mesh_surface_free(mesh);
 
@@ -143,5 +143,7 @@ int main(int argc, char **argv){
                 << "\n---------------------\n"
                 << "Full Solve stats:\n" << full_solve_stats
                 << "\n---------------------" << std::endl;
+        pd_solver_free(solver);
+        std::cout << "********\npd_benchmark end\n";
         return 0;
 }
