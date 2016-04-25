@@ -23,7 +23,9 @@ pd_solver_alloc(float const                         *positions,
                 uint32_t const                       n_attachment_constraints,
                 struct PdConstraintSpring const     *spring_constraints,
                 uint32_t const                       n_spring_constraints,
-                float const                          timestep);
+                float const                          timestep,
+                uint32_t const                       m,
+                uint32_t const                       n);
 
 
 void

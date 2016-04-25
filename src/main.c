@@ -48,6 +48,8 @@ static float timestep = 1.0f/60.0f;
 static uint32_t resolution_x = 16;
 static uint32_t resolution_y = 16;
 static char *mesh_filename;
+static uint32_t a_m = 3;
+static uint32_t a_n = 3;
 
 /* view control matrices */
 static mat4_t rotation = MAT4;
@@ -264,6 +266,7 @@ realize()
             glGetProgramInfoLog(programs[0], 1024, &info_len, info_log);
             printf("Program Failed to Compile or Link:\n%s\n--------", info_log);
         }
+        glProgramUniform1i(programs[0], 0, a_m);
 
         glCreateProgramPipelines(1, &pipeline);
         glBindProgramPipeline(pipeline);
@@ -353,7 +356,7 @@ realize()
         solver = pd_solver_alloc(mesh->positions, mesh->n_positions,
                                  mesh->attachments, mesh->n_attachments,
                                  mesh->springs, mesh->n_springs,
-                                 timestep);
+                                 timestep, a_m, a_n);
         pd_mesh_surface_free(mesh);
 }
 
@@ -476,7 +479,9 @@ main(int argc, char **argv)
                 "\t--size <x> <y>       Cloth mesh size (default 10 10)\n"
                 "\t--mesh <filename>    Tet mesh file to load\n"
                 "\t-n <number>          Number of iterations of projective dynamics per timestep (default 10)\n"
-                "\t-t <number>          Time taken in each timestep\n");
+                "\t-t <number>          Time taken in each timestep\n"
+                "\t-a_m <number>        Number of rows in block decomposition\n"
+                "\t-a_n <number>        Number of columns in block decomposition\n");
             return 0;
         }
         if (arg_flag(argv, argv + argc, "--size")){
@@ -496,6 +501,12 @@ main(int argc, char **argv)
         }
         if (arg_flag(argv, argv + argc, "-t")){
                 timestep = get_arg<float>(argv, argv + argc, "-t");
+        }
+        if (arg_flag(argv, argv + argc, "-a_m")){
+                a_m = get_arg<float>(argv, argv + argc, "-a_m");
+        }
+        if (arg_flag(argv, argv + argc, "-a_n")){
+                a_n = get_arg<float>(argv, argv + argc, "-a_n");
         }
 
         if (!glfwInit())

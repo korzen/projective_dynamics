@@ -67,16 +67,16 @@ pd_mesh_surface_mk_grid(uint32_t const n_x, uint32_t const n_y)
                         /* generate two triangles for the quad */
                         uint32_t const quad[4] = {
                                 i + j*n_x,
+                                (i + 1) + j*n_x,
                                 i + (j + 1)*n_x,
                                 (i + 1) + (j + 1)*n_x,
-                                (i + 1) + j*n_x,
                         };
 
                         /* TODO: use loop and tessellate in it */
                         uint32_t *t = m->indices + 3*2*(i + j*(n_x - 1));
                         t[0] = quad[0];
-                        t[1] = quad[1];
-                        t[2] = quad[2];
+                        t[1] = quad[3];
+                        t[2] = quad[1];
 
                         t += 3;
                         t[0] = quad[0];

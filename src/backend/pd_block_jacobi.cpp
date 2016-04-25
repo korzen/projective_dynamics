@@ -59,15 +59,22 @@ pd_solver_alloc(float const                         *positions,
                 uint32_t const                       n_attachments,
                 struct PdConstraintSpring const     *springs,
                 uint32_t const                       n_springs,
-                float const                          timestep)
+                float const                          timestep,
+                uint32_t const                       m,
+                uint32_t const                       n)
 {
         struct PdSolver *solver = new struct PdSolver;
 
         /* determine number of blocks and their size */
-        solver->m = 3;
-        solver->n = 3;
-        solver->block_m = n_positions;
-        solver->block_n = n_positions;
+        solver->m = m;
+        solver->n = n;
+        solver->block_m = 3*n_positions/m;
+        solver->block_n = 3*n_positions/n;
+
+        /* must be evenly decomposed into multiples of m, n */
+        assert(solver->block_m*solver->m == 3*n_positions);
+        assert(solver->block_n*solver->n == 3*n_positions);
+
         // We only solve blocks on the diagonal with the LU solve, so I think this
         // implies we **must** have a square decomposition
         assert(solver->m == solver->n);

@@ -5,6 +5,7 @@ out vec4 color;
 
 
 in vec4 v_pos;
+in vec4 v_color;
 
 
 void
@@ -18,4 +19,5 @@ main(void)
         } else {
                 color = vec4(0.2) + vec4(0.7) * geom_term;
         }
+        color *= v_color;
 }
