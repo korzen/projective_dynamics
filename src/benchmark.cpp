@@ -92,7 +92,7 @@ int main(int argc, char **argv){
 
         PdMeshSurface *mesh = nullptr;
         if (!mesh_filename.empty()){
-                std::cout << "Loading mesh " << mesh_filename << "\n";
+                std::cout << "Loading mesh " << mesh_filename << std::endl;
                 const size_t len = mesh_filename.size();
                 if (mesh_filename[len - 5] == 'b'){
                         printf("mesh is binary\n");
@@ -135,6 +135,9 @@ int main(int argc, char **argv){
         full_solve_stats.time_suffix = " ms";
 
         pd_mesh_surface_free(mesh);
+        local_stats.winsorize(5.0);
+        global_stats.winsorize(5.0);
+        full_solve_stats.winsorize(5.0);
 
         std::cout << "Solver: " << pd_solver_name(solver) << "\n"
                 << "Local Solve stats:\n" << local_stats

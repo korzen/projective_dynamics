@@ -22,7 +22,8 @@ class Stats:
 
 def parse_benchmarks(fname):
     match_cloth = re.compile("Using cloth of size (\d+)x(\d+)")
-    match_mesh = re.compile("Loading mesh (\w+)")
+    # todo: need to filter out to just the file name
+    match_mesh = re.compile("Loading mesh .*?(\w+)\.(?:bmesh|json)")
     match_positions = re.compile("n_positions[^\d]*(\d+)")
     match_springs = re.compile("n_springs[^\d]*(\d+)")
     re_stats = {
@@ -107,6 +108,7 @@ for arg in sys.argv[1:]:
 
 plt.figure()
 cloths = ["32x32", "64x64", "128x128", "256x256", "512x512"]
+meshes = ["chihuahua", "ant" "rhino"]
 label_handles = []
 
 for label in benchmarks:
