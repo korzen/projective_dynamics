@@ -9,7 +9,7 @@ else
 	RM=rm -f
 endif
 
-all: notes.pdf midterm_report.pdf
+all: notes.pdf midterm_report.pdf report.pdf
 
 midterm_report.pdf: midterm_report.tex
 	$(PDF_LATEX) midterm_report
