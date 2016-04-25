@@ -266,7 +266,7 @@ realize()
             glGetProgramInfoLog(programs[0], 1024, &info_len, info_log);
             printf("Program Failed to Compile or Link:\n%s\n--------", info_log);
         }
-        glProgramUniform1i(programs[0], 0, a_m);
+        glProgramUniform1i(programs[0], 0, resolution_x*resolution_y/a_m);
 
         glCreateProgramPipelines(1, &pipeline);
         glBindProgramPipeline(pipeline);
