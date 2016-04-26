@@ -334,11 +334,12 @@ realize()
 
         ubo_mapped->view       = MAT4;
 
-        float const near = -5.0f;
-        float const far  =  5.0f;
+        float const near =  0.001f;
+        float const far  =  10000.0f;
         ubo_mapped->projection = MAT4;
-        ubo_mapped->projection.c[2][2] = -2.0f/(far - near);
-        ubo_mapped->projection.c[3][2] = -(far + near)/(far - near);
+        ubo_mapped->projection.c[2][2] = -(far + near)/(far - near);
+        ubo_mapped->projection.c[2][3] = -1.0f;
+        ubo_mapped->projection.c[3][2] = -2.0f*far*near/(far - near);
 
 
         glCreateVertexArrays(1, &vao);
