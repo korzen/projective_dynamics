@@ -15,19 +15,42 @@ parallelization of global step, the local step is trivial, by implementing
 a special case of projective dynamics for mass-spring system~\cite{Liu13}
 
 
-\section{GPU}
+\section{Direct Solvers}
+Direct solvers are difficult to parallelize due interdependencies and we
+expected low performance. We used cuSPARSE to solve the global step and it
+was significantly slower than conjugate gradient. TODO figure
 
-The state-of-the art iterative solver seems to be~\cite{Wang15}.
+
+\section{Iterative Solvers}
+The matrix $A$ is SPD, thus we used conjugate gradient from ViennaCL library
+with various preconditioners. From our tests, after certian size (256x256)
+the algebraic multigrid preconditioner outperforms Jacobi or none,
+see Figure~.
+
+The state-of-the art iterative solver seems to be~\cite{Wang15} and we tried
+to implement it but we could not get it working. Another pitfal of this method
+is many input parameters to set up and tweak.
 
 
+\section{Domain Decomposition}
+In previous sections we noted that direct solvers are mostly serial (PARDISO
+was getting less than 2x speedup on 4 cores with 8 HW threads). Furthermore,
+the block Jacobi with preconditioner direct solver for each block scaled....
 
-\section{CPU}
+We also tested some basic (incorrect) domain decompositions, one where two
+pieces of cloth overlap and each acts as attachment constraint for the other.
+This approach is data parallel as the attachments are updated after both
+cloths were solved.
+
+The other approach is to use third cloth to glue the two pieces and do a
+fan-in (i.e. solve two pieces in parallel, then solve middle piece). We did
+not set the vertex weights properly (how to do it?), thus our cloth exploded
+as the middle step insert energy by pulling too much.
 
 
 \section{Conclusion}
 During this project we have explored direct and iterative solvers on GPU,
 simple domain decompositions, and parallel block Jacobi solver on CPU.
-
 
 
 \bibliography{report}{}
