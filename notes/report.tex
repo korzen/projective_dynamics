@@ -1,5 +1,7 @@
 \documentclass{article}
 
+\usepackage{graphicx}
+
 \title{CS 6660: Scaling Projective Dynamics on GPU}
 
 \begin{document}
@@ -18,7 +20,7 @@ a special case of projective dynamics for mass-spring system~\cite{Liu13}
 \section{Direct Solvers}
 Direct solvers are difficult to parallelize due interdependencies and we
 expected low performance. We used cuSPARSE to solve the global step and it
-was significantly slower than conjugate gradient. TODO figure
+was significantly slower than conjugate gradient.
 
 
 \section{Iterative Solvers}
@@ -51,6 +53,19 @@ as the middle step insert energy by pulling too much.
 \section{Conclusion}
 During this project we have explored direct and iterative solvers on GPU,
 simple domain decompositions, and parallel block Jacobi solver on CPU.
+Figure~\ref{fig:amg_direct} compares the best performing solver on CPU and
+GPU.
+We found out, that iterative solvers do not perform well in PD, since as the
+timestep gets larger, the iteration count increases sublinearly, thus the
+direct solver will eventually outperform the iterative solver.
+
+\begin{figure}[htb!]
+        \centering
+        \includegraphics[width=\linewidth]{img/amg_direct.png}
+        \caption{Direct solver on CPU compares to CG with AMG preconditioner
+                 on GPU.}
+        \label{fig:amg_direct}
+\end{figure}
 
 
 \bibliography{report}{}
