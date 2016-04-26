@@ -11,11 +11,11 @@
 \section{Introduction}
 Projective Dynamics~\cite{Bouaziz14} solves continuum mechanics system using
 local projective step and global implicit solver step. The local step projects
-to constraints to valid state and has no interdata dependencies, thus is data
-parallel. The global step solves a system on linear equations which represent
+to constraints valid state and has no interdata dependencies, thus is data
+parallel. The global step solves a system of linear equations which represent
 the projections and external forces (including inertia). We choose to explore
-parallelization of global step, the local step is trivial, by implementing
-a special case of projective dynamics for mass-spring system~\cite{Liu13}
+parallelization of global step, as the local step is trivial, by implementing
+a special case of projective dynamics, a mass-spring system~\cite{Liu13}
 
 
 \section{Direct Solvers}
@@ -38,7 +38,10 @@ is many input parameters to set up and tweak.
 \section{Domain Decomposition}
 In previous sections we noted that direct solvers are mostly serial (PARDISO
 was getting less than 2x speedup on 4 cores with 8 HW threads). Furthermore,
-the block Jacobi with preconditioner direct solver for each block scaled....
+the block Jacobi with preconditioner direct solver for each block scaled
+poorly, even with preconditioned blocks on the matrix diagonal. We postulate
+the scaling is affected by limited memory bandwitdth and load imbalance, as
+the columns in the individual rows are executed in serial.
 
 We also tested some basic (incorrect) domain decompositions, one where two
 pieces of cloth overlap and each acts as attachment constraint for the other.
@@ -48,7 +51,7 @@ cloths were solved.
 The other approach is to use third cloth to glue the two pieces and do a
 fan-in (i.e. solve two pieces in parallel, then solve middle piece). We did
 not set the vertex weights properly (how to do it?), thus our cloth exploded
-as the middle step insert energy by pulling too much.
+as the middle step inserts energy by pulling too much.
 
 
 \section{Conclusion}
