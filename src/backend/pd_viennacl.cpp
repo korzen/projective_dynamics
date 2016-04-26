@@ -771,8 +771,13 @@ pd_solver_draw_ui(struct PdSolver *solver)
                 };
                 int current = solver->preconditioner.get_current();
                 if (ImGui::Combo("Preconditioner", &current, preconditioners, NONE + 1)){
-                        std::cout << "changing precond\n";
+                        struct timespec precond_start;
+                        clock_gettime(CLOCK_MONOTONIC, &precond_start);
                         solver->preconditioner.set(PrecondType(current), solver->a_mat);
+                        struct timespec precond_end;
+                        clock_gettime(CLOCK_MONOTONIC, &precond_end);
+                        std::cout << "changing precond took " << pd_time_diff_ms(&precond_start, &precond_end) << " ms\n";
+
                         solver->global_cma = 0;
                         solver->local_cma = 0;
                         solver->n_iters = 0;
