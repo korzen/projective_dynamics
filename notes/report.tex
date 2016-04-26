@@ -68,6 +68,14 @@ direct solver will eventually outperform the iterative solver.
 \end{figure}
 
 
+We conclude the best performing is Chebyshev approach by Wang~\cite{Wang15},
+which outperforms both single core direct solver (1.5x) and AMG CG on GPU (3x).
+Unfortunately, we tried and failed to get it working in our framework, thus
+the comparison is based only on number of points ($L$ matrix). The major
+downside of Chebyshev method is multitude of tweakable parameters which need
+to be tuned for the application.
+
+
 \bibliography{report}{}
 \bibliographystyle{plain}
 
