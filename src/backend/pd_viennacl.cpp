@@ -224,6 +224,9 @@ void Preconditioner::set<AMG>(const viennacl::compressed_matrix<float> &a){
         current = AMG;
 }
 void Preconditioner::set(const PrecondType type, const viennacl::compressed_matrix<float> &a){
+        if (type == current){
+                return;
+        }
         switch (type){
                 case ILUT:
                         set<ILUT>(a);
