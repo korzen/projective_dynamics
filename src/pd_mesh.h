@@ -282,7 +282,7 @@ pd_mesh_surface_mk_from_binary(char const *fname){
         }
         // Read the attachments
         m->attachments = (struct PdConstraintAttachment *)malloc(m->n_attachments*sizeof *m->attachments);
-        if (fread(m->attachments, sizeof(sizeof *m->attachments), m->n_attachments, fp) != m->n_attachments){
+        if (fread(m->attachments, sizeof *m->attachments, m->n_attachments, fp) != m->n_attachments){
                 printf("Failed to read attachments\n");
                 free(m->attachments);
                 free(m);
@@ -291,7 +291,7 @@ pd_mesh_surface_mk_from_binary(char const *fname){
         }
         // Read the indices
         m->indices = (uint32_t *)malloc(m->n_indices*sizeof *m->indices);
-        if (fread(m->indices, sizeof(uint32_t), m->n_indices, fp) != m->n_indices){
+        if (fread(m->indices, sizeof *m->indices, m->n_indices, fp) != m->n_indices){
                 printf("Failed to read indices\n");
                 free(m->indices);
                 free(m->attachments);
@@ -312,7 +312,7 @@ pd_mesh_surface_mk_from_binary(char const *fname){
         }
         // Read the vertices
         m->positions = (float *)malloc(3*m->n_positions*sizeof *m->positions);
-        if (fread(m->positions, sizeof(float), 3 * m->n_positions, fp) != 3 * m->n_positions){
+        if (fread(m->positions, sizeof *m->positions, 3 * m->n_positions, fp) != 3 * m->n_positions){
                 printf("Failed to read positions\n");
                 free(m->positions);
                 free(m->springs);
@@ -356,13 +356,13 @@ pd_mesh_surface_write_binary(struct PdMeshSurface const *m, char const *fname){
                 return 0;
         }
         // write the attachments
-        if (fwrite(m->attachments, sizeof(sizeof *m->attachments), m->n_attachments, fp) != m->n_attachments){
+        if (fwrite(m->attachments, sizeof *m->attachments, m->n_attachments, fp) != m->n_attachments){
                 printf("Failed to write attachments\n");
                 fclose(fp);
                 return 0;
         }
         // write the indices, note: we have 3 ints per index
-        if (fwrite(m->indices, sizeof(uint32_t), m->n_indices, fp) != m->n_indices){
+        if (fwrite(m->indices, sizeof *m->indices, m->n_indices, fp) != m->n_indices){
                 printf("Failed to write indices\n");
                 fclose(fp);
                 return 0;
@@ -374,7 +374,7 @@ pd_mesh_surface_write_binary(struct PdMeshSurface const *m, char const *fname){
                 return 0;
         }
         // write the vertices
-        if (fwrite(m->positions, sizeof(float), 3 * m->n_positions, fp) != 3 * m->n_positions){
+        if (fwrite(m->positions, sizeof *m->positions, 3 * m->n_positions, fp) != 3 * m->n_positions){
                 printf("Failed to write positions\n");
                 fclose(fp);
                 return 0;
