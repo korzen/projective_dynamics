@@ -13,7 +13,7 @@
 #include "../pd_solver.h"
 
 // Would the diagonal blocks actually be SPD and we can use SimplicialLLT (or LDLT?)
-using SolverT = Eigen::SparseLU<Eigen::SparseMatrix<float>>;
+using SolverT = Eigen::SimplicialLLT<Eigen::SparseMatrix<float>>;
 
 struct PdSolver {
         Eigen::VectorXf positions;
@@ -64,10 +64,17 @@ pd_solver_alloc(float const                         *positions,
         struct PdSolver *solver = new struct PdSolver;
 
         /* determine number of blocks and their size */
-        solver->m = 3;
-        solver->n = 3;
-        solver->block_m = n_positions;
-        solver->block_n = n_positions;
+        // Find a divisor which is >= 3 and <= 12 to split up the work
+        int divisor = 12;
+        while ((n_positions * 3) % divisor != 0){
+                --divisor;
+        }
+        solver->m = divisor;
+        solver->n = divisor;
+        solver->block_m = (n_positions * 3) / divisor;
+        solver->block_n = (n_positions * 3) / divisor;
+        printf("Solving with divisor = %d giving [%d, %d] blocks, each is [%d, %d]\n",
+                        divisor, solver->m, solver->n, solver->block_m, solver->block_n);
         // We only solve blocks on the diagonal with the LU solve, so I think this
         // implies we **must** have a square decomposition
         assert(solver->m == solver->n);
