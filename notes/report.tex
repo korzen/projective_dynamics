@@ -49,6 +49,13 @@ is that it has many input parameters to set up and tweak.
 	\label{fig:viennacl_preconds}}
 \end{figure}
 
+\begin{figure}[htb!]
+        \centering
+		\includegraphics[width=0.9\linewidth]{img/amg_vs_jacobi_iters}
+		\caption{Number of iterations required to converge to $1 \times 10^{-5}$ error with ViennaCL's
+			conjugate gradient solver. \label{fig:amg_vs_jacobi_iters}}
+\end{figure}
+
 \section{Domain Decomposition}
 In previous sections we noted that direct solvers are mostly serial (PARDISO
 was getting less than 2x speedup on 4 cores with 8 HW threads). We also tried
@@ -88,14 +95,12 @@ direct solver will eventually outperform the iterative solver.
                  on GPU. \label{fig:amg_direct}}
 \end{figure}
 
-
-We conclude the best performing is Chebyshev approach by Wang~\cite{Wang15},
+We conclude the best performing solver is the Chebyshev approach by Wang~\cite{Wang15},
 which outperforms both single core direct solver (1.5x) and AMG CG on GPU (3x).
 Unfortunately, we tried and failed to get it working in our framework, thus
 the comparison is based only on number of points ($L$ matrix). The major
-downside of Chebyshev method is multitude of tweakable parameters which need
-to be tuned for the application.
-
+downside of Chebyshev method is many tweakable parameters which need
+to be tuned for the simulation.
 
 \bibliography{report}{}
 \bibliographystyle{plain}
