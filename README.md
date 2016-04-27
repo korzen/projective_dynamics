@@ -7,7 +7,7 @@
 
 - CUDA: Run `BACKEND=cuda make`
 
-The CUDA and OpenCL backends require [ViennaCL](http://viennacl.sourceforge.net/) to be installed.
+The CUDA backend requires [ViennaCL](http://viennacl.sourceforge.net/) to be installed.
 
 
 ## Blender Export
